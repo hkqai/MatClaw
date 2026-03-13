@@ -1,3 +1,5 @@
+mcp
+python-dotenv
 pubchempy
 mp-api
 pymatgen
