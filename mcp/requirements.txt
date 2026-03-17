@@ -3,3 +3,4 @@ python-dotenv
 pubchempy
 mp-api
 pymatgen
+ase

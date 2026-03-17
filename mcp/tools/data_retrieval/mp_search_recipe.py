@@ -270,14 +270,10 @@ def mp_search_recipe(
         # Initialize Materials Project API client
         with MPRester(api_key) as mpr:
             try:
-                # Attempt to use synthesis endpoint if available
                 if mpr.materials and hasattr(mpr.materials, 'synthesis'):
-                    # Use dedicated synthesis endpoint
                     synthesis_client = mpr.materials.synthesis
-                    
-                    # Build search criteria based on API signature
+
                     search_kwargs = {}
-                    
                     # target_formula: accepts single string only
                     if target_formula:
                         search_kwargs['target_formula'] = target_formula[0] if isinstance(target_formula, list) else target_formula
