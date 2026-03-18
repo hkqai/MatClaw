@@ -5,3 +5,7 @@ pubchempy
 mp-api
 pymatgen
 ase
+# enumlib (enum.x) is required for pymatgen_enumeration_generator but is NOT on PyPI.
+# It is installed automatically by setup.sh (via conda) on Linux/macOS/WSL.
+# Manual install: conda install -c conda-forge enumlib
+# Windows without WSL: not supported — see README.md.

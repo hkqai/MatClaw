@@ -22,6 +22,13 @@ from tools.ase import (
     ase_get_atoms,
     ase_list_databases
 )
+from tools.pymatgen import (
+    pymatgen_prototype_builder,
+    pymatgen_substitution_generator,
+    pymatgen_ion_exchange_generator,
+    pymatgen_perturbation_generator,
+    pymatgen_enumeration_generator,
+)
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -48,6 +55,13 @@ mcp.tool()(ase_store_result)
 mcp.tool()(ase_query)
 mcp.tool()(ase_get_atoms)
 mcp.tool()(ase_list_databases)
+
+# Pymatgen structure generation tools
+mcp.tool()(pymatgen_prototype_builder)
+mcp.tool()(pymatgen_substitution_generator)
+mcp.tool()(pymatgen_ion_exchange_generator)
+mcp.tool()(pymatgen_perturbation_generator)
+mcp.tool()(pymatgen_enumeration_generator)
 
 
 if __name__ == "__main__":

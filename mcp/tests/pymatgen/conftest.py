@@ -101,3 +101,44 @@ def simple_nacl_structure_obj():
         [[0, 0, 0], [0.5, 0.5, 0.5]]
     )
     return structure
+
+
+@pytest.fixture
+def disordered_li_na_cl():
+    """
+    2-atom Li₀.₅/Na₀.₅ cation-disordered rocksalt structure (dict).
+
+    The cation site carries 50% Li and 50% Na occupancy; the anion site is
+    fully occupied by Cl.  Enumerating up to max_cell_size=2 produces a small,
+    predictable set of ordered LiNaCl₂ / Li₂Cl₂ / Na₂Cl₂ approximants.
+
+    Returns:
+        dict: Structure.as_dict() with partial occupancy on the cation site.
+    """
+    from pymatgen.core import Structure, Lattice
+
+    lattice = Lattice.cubic(4.0)
+    structure = Structure(
+        lattice,
+        [{"Li": 0.5, "Na": 0.5}, "Cl"],
+        [[0.0, 0.0, 0.0], [0.5, 0.5, 0.5]],
+    )
+    return structure.as_dict()
+
+
+@pytest.fixture
+def disordered_li_na_cl_obj():
+    """
+    Same as disordered_li_na_cl but returns the pymatgen Structure object.
+
+    Returns:
+        Structure: Pymatgen Structure object with partial cation occupancy.
+    """
+    from pymatgen.core import Structure, Lattice
+
+    lattice = Lattice.cubic(4.0)
+    return Structure(
+        lattice,
+        [{"Li": 0.5, "Na": 0.5}, "Cl"],
+        [[0.0, 0.0, 0.0], [0.5, 0.5, 0.5]],
+    )
