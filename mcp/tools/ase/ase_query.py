@@ -9,7 +9,7 @@ from pydantic import Field
 import numpy as np
 
 
-def ase_query_db(
+def ase_query(
     db_path: Annotated[
         str,
         Field(

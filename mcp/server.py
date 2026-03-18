@@ -18,7 +18,7 @@ from tools.materials_project import (
 from tools.ase import (
     ase_connect_or_create_db,
     ase_store_result,
-    ase_query_db,
+    ase_query,
     ase_get_atoms,
     ase_list_databases
 )
@@ -45,7 +45,7 @@ mcp.tool()(mp_search_recipe)
 # ASE database tools
 mcp.tool()(ase_connect_or_create_db)
 mcp.tool()(ase_store_result)
-mcp.tool()(ase_query_db)
+mcp.tool()(ase_query)
 mcp.tool()(ase_get_atoms)
 mcp.tool()(ase_list_databases)
 

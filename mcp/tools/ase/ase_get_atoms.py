@@ -20,7 +20,7 @@ def ase_get_atoms(
         Union[int, List[int]],
         Field(
             description="Database row ID(s) to retrieve. Can be a single integer or list of integers. "
-            "Example: 42 or [1, 5, 10]. Get IDs from ase_query_db or ase_store_result."
+            "Example: 42 or [1, 5, 10]. Get IDs from ase_query or ase_store_result."
         )
     ],
     include_results: Annotated[
