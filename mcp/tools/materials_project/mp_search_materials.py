@@ -163,9 +163,10 @@ def mp_search_materials(
                 
                 search_criteria["band_gap"] = tuple(band_gap_range)
             
-            # Crystal system - use symmetry field
+            # Crystal system filter
             if crystal_system:
-                search_criteria["symmetry"] = {"crystal_system": crystal_system}
+                from emmet.core.symmetry import CrystalSystem
+                search_criteria["crystal_system"] = CrystalSystem(crystal_system)
             
             # Stability filters
             if is_stable:
