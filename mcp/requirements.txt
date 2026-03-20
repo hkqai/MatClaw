@@ -5,3 +5,10 @@ pubchempy
 mp-api
 pymatgen
 ase
+opencv-python
+torch
+timm
+wget
+Pillow
+docling
+docling-core

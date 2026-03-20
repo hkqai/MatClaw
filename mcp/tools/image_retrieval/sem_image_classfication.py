@@ -1,21 +1,14 @@
 import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import DataLoader, Subset
-from torchvision import datasets
 import timm
 from timm.data import resolve_data_config
 from timm.data.transforms_factory import create_transform
-from sklearn.model_selection import train_test_split
-import numpy as np
-import copy
 import os
 from os import listdir
 from os.path import isfile, join
 import wget
+from pathlib import Path
 
 from PIL import Image
-import matplotlib.pyplot as plt
 import shutil
 import torch.nn.functional as F
 CLASS_NAMES = ['NONSEM', 'SEM']
@@ -34,14 +27,15 @@ def download_with_python_wget(url, output_dir="."):
         print(f"\nAn error occurred: {e}")
 
 url = "https://github.com/VCERS/MatClaw/releases/download/v0.0.1/convnextv2_base-finetuned-sem-classifier.pth"
-download_with_python_wget(url, output_dir="./models")
-
-MODEL_PATH = './models/sem_classifier_model.pth'
+MODEL_NAME = 'convnextv2_base.fcmae_ft_in22k_in1k'
+MODEL_PATH = './models/convnextv2_base-finetuned-sem-classifier.pth'
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def load_model():
     """load model"""
     print(f"Loading model: {MODEL_NAME}...")
-    
+    if not os.path.isfile(MODEL_PATH):
+        download_with_python_wget(url, output_dir="./models")
     # 1. Create the model architecture
     model = timm.create_model(MODEL_NAME, pretrained=False, num_classes=len(CLASS_NAMES))
     
@@ -123,17 +117,11 @@ def predict_image(image_name, MODEL, infer_path, output_dir):
 
     if os.path.isfile(TEST_PATH):
         # Predict one image
-        #print(f"\nPredicting: {TEST_PATH}")
         label, conf = predict_single_image(MODEL, transform, TEST_PATH)
-        #print(f"Result: {label} ({conf:.2f}%)")
-        #print(f"images: {image_name}")
-        #image_array = np.asarray(Image.open(TEST_PATH))
-        #plt.imshow(image_array)
-        #plt.show()
-        nonsem_destination_path = os.path.join(output_dir, '/NONSEM', image_name)
-        nonsem_destination_path.mkdir(parents=True, exist_ok=True)
-        sem_destination_path = os.path.join(output_dir, '/SEM', image_name)
-        sem_destination_path.mkdir(parents=True, exist_ok=True)
+        Path(os.path.join(output_dir, 'NONSEM')).mkdir(parents=True, exist_ok=True)
+        Path(os.path.join(output_dir, 'SEM')).mkdir(parents=True, exist_ok=True)
+        nonsem_destination_path = os.path.join(output_dir, 'NONSEM', image_name)
+        sem_destination_path = os.path.join(output_dir, 'SEM', image_name)
         if label == 'NONSEM' and conf >= 80:
             shutil.copy2(TEST_PATH, nonsem_destination_path)
     

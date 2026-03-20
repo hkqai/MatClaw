@@ -1,22 +1,13 @@
-import os
-import csv
-import json
 import time
-import glob
-import requests
-import numpy as np
-import pandas as pd
-import subprocess
-import re
-import urllib.parse
 from os import listdir
 from os.path import isfile, join
-import logging
 from pathlib import Path
-from docling_core.types.doc import ImageRefMode, PictureItem, TableItem
+from docling_core.types.doc import PictureItem
 from docling.datamodel.base_models import InputFormat
 from docling.datamodel.pipeline_options import PdfPipelineOptions
 from docling.document_converter import DocumentConverter, PdfFormatOption
+
+IMAGE_RESOLUTION_SCALE = 2.0
 
 def get_paper_figure(paper_path, output_dir):
     """
@@ -33,6 +24,8 @@ def get_paper_figure(paper_path, output_dir):
         get_paper_figure("./paper_folder", "./result")
     """
     papers = [join(paper_path, f) for f in listdir(paper_path) if isfile(join(paper_path, f))]
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
     #logging.basicConfig(level=logging.INFO)
     for file in papers:
         input_doc_path = file
@@ -55,8 +48,6 @@ def get_paper_figure(paper_path, output_dir):
         start_time = time.time()
     
         conv_res = doc_converter.convert(input_doc_path)
-    
-        output_dir.mkdir(parents=True, exist_ok=True)
         doc_filename = conv_res.input.file.stem
     
         # Save page images

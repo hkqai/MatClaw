@@ -1,6 +1,4 @@
 import cv2
-import numpy as np
-import matplotlib.pyplot as plt
 import os
 from os import listdir
 from os.path import isfile, join
@@ -21,6 +19,7 @@ def extract_subfigures(image_folder, image_filename, output_dir="extracted_panel
         extract_subfigures("./image_folder", "image_1", "./result")
     """
     # 1. Load the image
+    image_path = join(image_folder, image_filename)
     if not os.path.exists(image_path):
         print(f"Error: File {image_path} not found.")
         return
@@ -103,4 +102,4 @@ def extract_all_subfigures(data_dir, output_dir):
     #data_dir = os.path.join(data_dir, '/SEM')
     image_files = [f for f in listdir(data_dir) if isfile(join(data_dir, f))]
     for i in range(len(image_files)):
-        extract_subfigures(os.path.join(data_dir, image_files[i]), image_files[i], output_dir)
+        extract_subfigures(data_dir, image_files[i], output_dir)
