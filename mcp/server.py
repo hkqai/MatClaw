@@ -39,6 +39,7 @@ from tools.urdf import (
 from tools.analysis import (
     structure_validator,
     composition_analyzer,
+    structure_analyzer,
 )
 
 # Set up logging
@@ -84,6 +85,7 @@ mcp.tool()(urdf_inspect)
 # Analysis tools for materials screening
 mcp.tool()(structure_validator)
 mcp.tool()(composition_analyzer)
+mcp.tool()(structure_analyzer)
 
 
 if __name__ == "__main__":
