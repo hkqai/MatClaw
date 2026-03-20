@@ -5,6 +5,7 @@ pubchempy
 mp-api
 pymatgen
 ase
+lxml  # optional: used for pretty-printing fixed URDF XML
 # enumlib (enum.x) is required for pymatgen_enumeration_generator but is NOT on PyPI.
 # It is installed automatically by setup.sh (via conda) on Linux/macOS/WSL.
 # Manual install: conda install -c conda-forge enumlib

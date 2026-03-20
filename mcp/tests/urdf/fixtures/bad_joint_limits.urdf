@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<robot name="bad_joints_robot">
+  <link name="base_link">
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001"/>
+    </inertial>
+  </link>
+  <link name="link_a">
+    <inertial>
+      <mass value="0.5"/>
+      <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001"/>
+    </inertial>
+  </link>
+  <link name="link_b">
+    <inertial>
+      <mass value="0.5"/>
+      <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001"/>
+    </inertial>
+  </link>
+  <link name="link_c">
+    <inertial>
+      <mass value="0.5"/>
+      <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001"/>
+    </inertial>
+  </link>
+
+  <!-- Infinite position limits -->
+  <joint name="joint_inf" type="revolute">
+    <parent link="base_link"/>
+    <child link="link_a"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="10.0" lower="-inf" upper="inf" velocity="1.0"/>
+  </joint>
+
+  <!-- Missing effort and velocity -->
+  <joint name="joint_no_effort" type="revolute">
+    <parent link="link_a"/>
+    <child link="link_b"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-3.14" upper="3.14"/>
+  </joint>
+
+  <!-- Missing limit entirely for revolute -->
+  <joint name="joint_no_limit" type="revolute">
+    <parent link="link_b"/>
+    <child link="link_c"/>
+    <axis xyz="0 0 1"/>
+  </joint>
+</robot>

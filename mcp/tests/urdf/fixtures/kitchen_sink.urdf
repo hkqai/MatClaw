@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<robot name="kitchen-sink">
+  <material name="red">
+    <color rgba="1 0 0 1"/>
+  </material>
+  <material name="red">
+    <color rgba="0.9 0.1 0 1"/>
+  </material>
+
+  <link name="base-link">
+    <visual>
+      <geometry>
+        <mesh filename="meshes/nonexistent.dae"/>
+      </geometry>
+      <material name="red"/>
+    </visual>
+    <!-- No collision -->
+    <!-- No inertial -->
+  </link>
+
+  <link name="2nd_link">
+    <visual>
+      <geometry><box size="0.1 0.1 0.1"/></geometry>
+    </visual>
+    <collision>
+      <geometry><box size="0.1 0.1 0.1"/></geometry>
+    </collision>
+    <inertial>
+      <mass value="0.0"/>
+      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+    </inertial>
+  </link>
+
+  <joint name="base-to-2nd" type="revolute">
+    <parent link="base-link"/>
+    <child link="2nd_link"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-inf" upper="inf"/>
+  </joint>
+</robot>

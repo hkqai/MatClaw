@@ -31,6 +31,11 @@ from tools.pymatgen import (
     pymatgen_defect_generator,
     pymatgen_sqs_generator,
 )
+from tools.urdf import (
+    urdf_validate,
+    urdf_fix,
+    urdf_inspect,
+)
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -66,6 +71,11 @@ mcp.tool()(pymatgen_perturbation_generator)
 mcp.tool()(pymatgen_enumeration_generator)
 mcp.tool()(pymatgen_defect_generator)
 mcp.tool()(pymatgen_sqs_generator)
+
+# URDF validation and fixing tools
+mcp.tool()(urdf_validate)
+mcp.tool()(urdf_fix)
+mcp.tool()(urdf_inspect)
 
 
 if __name__ == "__main__":
