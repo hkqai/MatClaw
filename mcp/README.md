@@ -1,6 +1,6 @@
 # MatClaw MCP Server
 
-MCP (Model Context Protocol) server exposing tools for inorganic materials discovery: PubChem, Materials Project, ASE, and pymatgen-based structure generators.
+MCP (Model Context Protocol) server exposing tools for inorganic materials discovery.
 
 ---
 
@@ -151,21 +151,64 @@ python -m pytest tests/pymatgen/test_enumeration_generator.py -v
 
 ## Tools
 
+### Pubchem Data Retrieval
+
 | Tool | Description |
 |---|---|
 | `pubchem_search_compounds` | Search PubChem by name, SMILES, formula, InChIKey |
 | `pubchem_get_compound_properties` | Get detailed properties for PubChem CIDs |
+
+### Materials Project Data Retrieval
+
+| Tool | Description |
+|---|---|
 | `mp_search_materials` | Search Materials Project for inorganic crystals |
 | `mp_get_material_properties` | Get detailed properties for MP material IDs |
 | `mp_get_detailed_property_data` | Get band structure, DOS, elastic tensor, etc. |
 | `mp_search_recipe` | Search Synthesis Explorer for experimental recipes |
+
+### ASE Database
+
+| Tool | Description |
+|---|---|
 | `ase_connect_or_create_db` | Connect to or create an ASE SQLite database |
 | `ase_store_result` | Store an Atoms object and results to the database |
-| `ase_query_db` | Query the ASE database by formula, property, tag |
+| `ase_query` | Query the ASE database by formula, property, tag |
 | `ase_get_atoms` | Retrieve full Atoms objects from the database |
 | `ase_list_databases` | List and summarize ASE .db files in a directory |
-| `pymatgen_prototype_builder` | Build structures from AFLOW/ICSD prototype labels |
+
+### Pymatgen Candidate Generation
+
+| Tool | Description |
+|---|---|
+| `pymatgen_prototype_builder` | Build structures from spacegroup, species, and lattice parameters |
 | `pymatgen_substitution_generator` | Generate structures by element substitution |
-| `pymatgen_ion_exchange_generator` | Generate ion-exchanged variants of a structure |
+| `pymatgen_ion_exchange_generator` | Generate ion-exchanged variants with charge balancing |
 | `pymatgen_perturbation_generator` | Randomly perturb atomic positions and lattice |
 | `pymatgen_enumeration_generator` | Enumerate ordered supercell decorations of disordered structures (**requires enumlib**) |
+| `pymatgen_defect_generator` | Generate point defect supercells (vacancies, substitutions, interstitials) |
+| `pymatgen_sqs_generator` | Generate special quasirandom structures (SQS) for alloy modeling |
+
+### Analysis
+
+| Tool | Description |
+|---|---|
+| `structure_validator` | Validate crystal structures (distances, symmetry, charge, stability) |
+| `composition_analyzer` | Extract composition-based ML features (elemental properties, statistics) |
+| `structure_analyzer` | Extract structure-based ML features (coordination, packing, RDF) |
+| `stability_analyzer` | Analyze thermodynamic stability (formation energy, hull distance) |
+| `structure_fingerprinter` | Generate structural fingerprints (SOAP, MBTR, Sine/Coulomb matrices) |
+
+### Selection & Ranking
+
+| Tool | Description |
+|---|---|
+| `multi_objective_ranker` | Multi-objective optimization (Pareto, weighted sum, constraint-based) |
+
+### URDF (Robotics)
+
+| Tool | Description |
+|---|---|
+| `urdf_validate` | Validate URDF robot models |
+| `urdf_fix` | Automatically fix common URDF errors |
+| `urdf_inspect` | Inspect and analyze URDF structure |
