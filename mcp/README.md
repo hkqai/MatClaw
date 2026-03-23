@@ -26,12 +26,6 @@ The server has two kinds of dependencies:
 
 All pip packages are installed automatically by `setup.sh`. The `setup.sh` script also attempts to install `enumlib` via conda if conda is available.
 
-For the fine-tuned chemistry LLM tool, install extra dependencies manually:
-
-```bash
-pip install torch transformers
-```
-
 ### Why two package managers?
 
 `enumlib` is a compiled C++ binary (`enum.x`) that implements the Hart-Forcade enumeration algorithm. It is:
