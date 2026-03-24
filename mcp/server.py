@@ -48,7 +48,6 @@ from tools.selection import (
 )
 from tools.synthesis_planning import (
     template_route_generator,
-    convert_mp_recipes_to_synthesis_routes,
 )
 
 # Set up logging
@@ -103,7 +102,6 @@ mcp.tool()(multi_objective_ranker)
 
 # Experiment planning tools
 mcp.tool()(template_route_generator)
-mcp.tool()(convert_mp_recipes_to_synthesis_routes)
 
 
 if __name__ == "__main__":
