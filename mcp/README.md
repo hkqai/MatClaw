@@ -157,6 +157,7 @@ python -m pytest tests/pymatgen/test_enumeration_generator.py -v
 |---|---|
 | `pubchem_search_compounds` | Search PubChem by name, SMILES, formula, InChIKey |
 | `pubchem_get_compound_properties` | Get detailed properties for PubChem CIDs |
+| `pubchem_get_safety_data` | Get safety data (GHS classification, hazards, precautions) for compounds |
 
 ### Materials Project Data Retrieval
 
@@ -188,10 +189,35 @@ python -m pytest tests/pymatgen/test_enumeration_generator.py -v
 | `pymatgen_enumeration_generator` | Enumerate ordered supercell decorations of disordered structures (**requires enumlib**) |
 | `pymatgen_defect_generator` | Generate point defect supercells (vacancies, substitutions, interstitials) |
 | `pymatgen_sqs_generator` | Generate special quasirandom structures (SQS) for alloy modeling |
-| `urdf_validate` | Validate a URDF file for Isaac Sim / USD compatibility |
-| `urdf_fix` | Auto-fix URDF issues for Isaac Sim / USD compatibility |
-| `urdf_inspect` | Inspect a URDF's structure: kinematic tree, mass distribution, mesh files, materials, and joint breakdown |
-| `lula_generate_robot_description` | Generate a Lula robot description with automatic collision-sphere placement |
+
+### ML Prediction
+
+| Tool | Description |
+|---|---|
+| `ml_relax_structure` | Relax crystal structures using M3GNet universal ML potential |
+| `ml_predict_bandgap` | Predict band gap using pre-trained MEGNet model |
+| `ml_predict_eform` | Predict formation energy using pre-trained MEGNet model |
+
+### Synthesis Planning
+
+| Tool | Description |
+|---|---|
+| `synthesis_recipe_quantifier` | Extract and quantify synthesis parameters from text recipes |
+| `template_route_generator` | Generate template-based synthesis routes for inorganic materials |
+
+### URDF (Robotics)
+
+| Tool | Description |
+|---|---|
+| `urdf_validate` | Validate URDF robot models for Isaac Sim / USD compatibility |
+| `urdf_fix` | Automatically fix common URDF errors for Isaac Sim / USD compatibility |
+| `urdf_inspect` | Inspect and analyze URDF structure: kinematic tree, mass distribution, mesh files, materials, joint breakdown |
+
+### Lula (Robotics)
+
+| Tool | Description |
+|---|---|
+| `lula_generate_robot_description` | Generate Lula robot description with automatic collision-sphere placement for NVIDIA Isaac Sim |
 
 ### Analysis
 
@@ -208,11 +234,3 @@ python -m pytest tests/pymatgen/test_enumeration_generator.py -v
 | Tool | Description |
 |---|---|
 | `multi_objective_ranker` | Multi-objective optimization (Pareto, weighted sum, constraint-based) |
-
-### URDF (Robotics)
-
-| Tool | Description |
-|---|---|
-| `urdf_validate` | Validate URDF robot models |
-| `urdf_fix` | Automatically fix common URDF errors |
-| `urdf_inspect` | Inspect and analyze URDF structure |

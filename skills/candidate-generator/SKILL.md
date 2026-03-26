@@ -447,29 +447,463 @@ for dc in defect_cells['structures']:
 
 ---
 
-## Decision Guide
+## Candidate Generation Decision Algorithm
+
+**Execute this algorithm to select the correct tool(s) for your candidate generation task.**
+
+### STEP 0: Analyze User Request
+
+**Step 0.1:** Identify starting point
+```
+IF user has existing structure (from MP, CIF, ASE database):
+    SET starting_structure = existing_structure
+    GOTO STEP 1 (skip seed generation)
+ELSE IF user specifies spacegroup + composition:
+    GOTO STEP 1 (seed generation needed)
+ELSE:
+    REQUEST clarification from user
+```
+
+---
+
+### STEP 1: Seed Structure Generation (CONDITIONAL)
+
+**Condition:** Only execute if no existing structure available
+
+**Decision Logic:**
+```
+IF starting_structure exists:
+    SKIP this step, GOTO STEP 2
+ELSE:
+    # Need to build structure from scratch
+    CALL pymatgen_prototype_builder(
+        spacegroup=user_specified_sg,
+        species=user_specified_elements,
+        lattice_parameters=user_specified_params
+    )
+    SET starting_structure = result.structures[0]
+    GOTO STEP 2
+```
+
+**Common prototype reference:**
+```
+IF user mentions "perovskite":
+    USE spacegroup=221
+ELSE IF user mentions "rock-salt" or "NaCl-type":
+    USE spacegroup=225
+ELSE IF user mentions "spinel":
+    USE spacegroup=227
+ELSE IF user mentions "layered oxide" or "LiCoO2-type":
+    USE spacegroup=166
+ELSE IF user mentions "olivine" or "LiFePO4-type":
+    USE spacegroup=62
+ELSE IF user mentions "rutile":
+    USE spacegroup=136
+ELSE IF user mentions "wurtzite":
+    USE spacegroup=186
+ELSE:
+    REQUEST spacegroup number from user
+```
+
+---
+
+### STEP 2: Chemical Space Exploration (CONDITIONAL)
+
+**Condition:** Execute if user wants to explore different compositions
+
+**Decision Logic:**
+```
+IF user wants to keep exact composition:
+    SKIP this step, GOTO STEP 3
+ELSE IF user requests chemical substitutions or doping:
+    GOTO Step 2.1 (determine substitution type)
+```
+
+**Step 2.1:** Determine substitution type
+```
+IF material is ionic AND charge balance is critical:
+    # Examples: Battery materials, ionic conductors
+    GOTO Step 2A (charge-neutral ion exchange)
+ELSE IF exploratory screening OR charge balance not enforced:
+    # Examples: Isostructural analogues, ML training sets
+    GOTO Step 2B (substitution generator)
+ELSE:
+    # Default to charge-neutral for safety
+    GOTO Step 2A
+```
+
+---
+
+### STEP 2A: Charge-Neutral Ion Exchange
+
+**When to use:**
+- Material is ionic (oxides, sulfides, halides)
+- Charge neutrality must be maintained
+- Battery cathode analogues (Li → Na)
+- Doping with different oxidation states
+
+**Algorithm:**
+```
+CALL pymatgen_ion_exchange_generator(
+    input_structures=starting_structure,
+    replace_ion=user_specified_ion,
+    with_ions=user_specified_replacements,
+    exchange_fraction=1.0,  # Or user-specified
+    allow_oxidation_state_change=False,  # Enforce charge neutrality
+    max_structures=20
+)
+
+SET candidate_structures = result.structures
+GOTO STEP 3
+```
+
+**Example decision:**
+```
+IF user says "Li → Na in LiCoO2":
+    USE replace_ion='Li', with_ions=['Na']
+IF user says "partial Mg doping on Li site":
+    USE replace_ion='Li', with_ions={'Li': 0.7, 'Mg': 0.3}
+```
+
+---
+
+### STEP 2B: Exploratory Substitution
+
+**When to use:**
+- Isostructural analogue screening
+- Charge balance handled post-hoc
+- Building diverse training sets
+- Exploring many chemical variations
+
+**Algorithm:**
+```
+CALL pymatgen_substitution_generator(
+    input_structures=starting_structure,
+    substitutions=user_specified_substitutions,
+    n_structures=determine_n_structures(),
+    max_attempts=calculate_max_attempts(),
+    enforce_charge_neutrality=False
+)
+
+SET candidate_structures = result.structures
+GOTO STEP 3
+```
+
+**Step 2B.1:** Calculate appropriate parameters
+```
+# Determine n_structures based on substitution mode
+IF all substitutions have fraction=1.0:
+    # Deterministic full swaps - only need 1 copy each
+    SET n_structures = 1
+ELSE:
+    # Fractional doping - generate multiple variants
+    SET n_structures = 10
+
+# Ensure max_attempts is sufficient
+SET num_combinations = calculate_substitution_combinations(substitutions)
+SET max_attempts = n_structures * num_combinations * 1.2  # 20% buffer
+```
+
+---
+
+### STEP 3: Disorder Resolution (CONDITIONAL)
+
+**Condition:** Execute if structures have partial occupancies
+
+**Step 3.1:** Check for disorder
+```
+IF any candidate_structure has fractional site occupancies:
+    GOTO Step 3.2 (determine resolution method)
+ELSE:
+    # Fully ordered structures
+    GOTO STEP 4
+```
+
+**Step 3.2:** Determine resolution method
+```
+IF need ALL possible orderings (ground-state search, cluster expansion):
+    GOTO Step 3A (enumeration)
+ELSE IF modeling disorder itself (solid solution, high-entropy):
+    GOTO Step 3B (SQS generation)
+ELSE IF unsure:
+    # Default decision based on system complexity
+    SET num_mixing_species = count(species with partial occupancy)
+    IF num_mixing_species <= 2:
+        GOTO Step 3A (enumeration tractable)
+    ELSE:
+        GOTO Step 3B (SQS more appropriate)
+```
+
+---
+
+### STEP 3A: Complete Enumeration (Ground-State Search)
+
+**When to use:**
+- Need complete ordered-configuration space
+- Searching for ground-state ordering
+- Building cluster expansion training set
+- System has ≤ 2 mixing species
+
+**Algorithm:**
+```
+# Determine max_cell_size based on system complexity
+SET num_mixing_species = count_mixing_species(disordered_structures)
+
+IF num_mixing_species == 1:
+    SET max_cell_size = 8  # Single species ordering (e.g., vacancies)
+ELSE IF num_mixing_species == 2:
+    SET max_cell_size = 4  # Binary mixing (e.g., Li/vacancy)
+ELSE IF num_mixing_species >= 3:
+    SET max_cell_size = 2  # Ternary+ mixing (combinatorial explosion)
+ELSE:
+    SET max_cell_size = 4  # Default
+
+CALL pymatgen_enumeration_generator(
+    input_structures=disordered_structures,
+    min_cell_size=1,
+    max_cell_size=max_cell_size,
+    n_structures=100,  # Or user-specified
+    sort_by='ewald',  # Lowest energy orderings first
+    add_oxidation_states=True,
+    refine_structure=True
+)
+
+SET ordered_structures = result.structures
+GOTO STEP 4
+```
+
+---
+
+### STEP 3B: SQS Generation (Disorder Modeling)
+
+**When to use:**
+- Modeling solid solutions (disorder is physical state)
+- High-entropy materials (≥ 4 mixing species)
+- Large systems where enumeration is intractable
+- Random alloy approximation needed
+
+**Algorithm:**
+```
+# Determine supercell size based on system
+SET num_mixing_species = count_mixing_species(disordered_structures)
+
+IF num_mixing_species <= 2:
+    SET supercell_size = 12  # Binary
+ELSE IF num_mixing_species == 3:
+    SET supercell_size = 16  # Ternary
+ELSE:
+    SET supercell_size = 20  # High-entropy (4+ species)
+
+# Adjust MC steps based on complexity
+SET n_mc_steps = 50000 * num_mixing_species
+
+CALL pymatgen_sqs_generator(
+    input_structures=disordered_structures,
+    supercell_size=supercell_size,
+    n_structures=5,  # Multiple independent SQS candidates
+    n_mc_steps=n_mc_steps,
+    n_shells=4,
+    seed=user_seed OR 42
+)
+
+SET ordered_structures = result.structures  # Best SQS structures
+GOTO STEP 4
+```
+
+---
+
+### STEP 4: Defect Generation (OPTIONAL BRANCH)
+
+**Condition:** Only execute if user needs point defect supercells
+
+**Decision Logic:**
+```
+IF user requests defects OR vacancies OR doping:
+    GOTO Step 4.1 (defect generation)
+ELSE:
+    GOTO STEP 5
+```
+
+**Step 4.1:** Defect generation
+```
+# IMPORTANT: Start from single, ordered, defect-free host structure
+SET host_structure = select_one_ordered_structure(candidate_structures)
+
+# Determine defect types from user request
+SET vacancy_species = extract_vacancy_species_from_request()
+SET substitution_species = extract_substitution_species_from_request()
+SET interstitial_species = extract_interstitial_species_from_request()
+
+CALL pymatgen_defect_generator(
+    input_structure=host_structure,  # Single structure only!
+    vacancy_species=vacancy_species,
+    substitution_species=substitution_species,
+    interstitial_species=interstitial_species,
+    charge_states=user_specified_charges OR default_charges,
+    supercell_min_atoms=64,  # Adjust based on DFT setup
+    inequivalent_only=True
+)
+
+SET defect_structures = result.structures
+GOTO STEP 5
+```
+
+---
+
+### STEP 5: Perturbation/Augmentation (OPTIONAL)
+
+**Condition:** Execute if user needs:
+- Symmetry breaking before DFT
+- ML dataset augmentation
+- Structural ensembles
+
+**Decision Logic:**
+```
+IF user requests perturbation OR rattling OR strain OR augmentation:
+    GOTO Step 5.1 (perturbation)
+ELSE IF structures going to DFT relaxation:
+    # Recommend subtle perturbation to avoid symmetry saddle points
+    ASK user "Apply small perturbations to break symmetry? (Recommended for DFT)"
+    IF yes:
+        GOTO Step 5.1 with displacement_max=0.05
+ELSE:
+    GOTO STEP 6 (finalize)
+```
+
+**Step 5.1:** Apply perturbations
+```
+# Determine perturbation parameters based on use case
+IF use_case == "DFT_relaxation":
+    SET displacement_max = 0.05  # Subtle rattling
+    SET strain_percent = None  # No strain
+    SET n_structures = 1  # One perturbed copy per structure
+ELSE IF use_case == "ML_augmentation":
+    SET displacement_max = 0.15  # Moderate rattling
+    SET strain_percent = [-2.0, 2.0]  # Random strain
+    SET n_structures = 10  # Many perturbed copies
+ELSE IF use_case == "defect_relaxation":
+    SET displacement_max = 0.08  # Gentle rattling around defect
+    SET strain_percent = None
+    SET n_structures = 3
+ELSE:
+    # User-specified or defaults
+    SET displacement_max = user_value OR 0.1
+    SET strain_percent = user_value OR None
+    SET n_structures = user_value OR 10
+
+CALL pymatgen_perturbation_generator(
+    input_structures=structures_to_perturb,
+    displacement_max=displacement_max,
+    strain_percent=strain_percent,
+    n_structures=n_structures,
+    seed=user_seed OR None
+)
+
+SET final_structures = result.structures
+GOTO STEP 6
+```
+
+---
+
+### STEP 6: Storage and Validation
+
+**Step 6.1:** Store in ASE database
+```
+# Connect to or create database
+CALL ase_connect_or_create_db(
+    db_path=user_specified_path OR "candidates.db"
+)
+
+# Store each structure
+FOR each structure in final_structures:
+    # IMPORTANT: Ensure output_format='ase' was used in generation
+    IF structure format is not ASE:
+        CONVERT to ASE format
+    
+    # Prepare metadata (avoid ASE reserved keys!)
+    SET metadata = {
+        'generator': tool_used,
+        'compound': structure.formula,  # NOT 'formula'!
+        'campaign': user_campaign_name,
+        'source_structure': parent_structure_id,
+        'creation_date': current_date
+    }
+    
+    CALL ase_store_result(
+        db_path=db_path,
+        atoms_dict=structure,
+        key_value_pairs=metadata
+    )
+```
+
+**Step 6.2:** Optional MP stability check
+```
+IF user wants stability filtering:
+    FOR each structure in final_structures:
+        CALL mp_search_materials(
+            formula=structure.formula,
+            is_stable=True
+        )
+        
+        IF result.count > 0:
+            # Composition exists in MP and is stable
+            FLAG structure.likely_stable = True
+        ELSE:
+            # May be unstable or not in MP
+            FLAG structure.requires_stability_check = True
+```
+
+**Step 6.3:** Generate summary report
+```
+RETURN {
+    "total_candidates_generated": count(final_structures),
+    "generation_path": [list of steps executed],
+    "database_location": db_path,
+    "metadata": {
+        "starting_structure": starting_structure_info,
+        "chemical_substitutions": substitutions_applied,
+        "disorder_resolution": method_used,
+        "defects_generated": defect_count,
+        "perturbations_applied": perturbation_params
+    },
+    "next_steps": [
+        "Query database: ase_query_db(...)",
+        "Screen with MP: mp_search_materials(...)",
+        "Pass to candidate-screener for property enrichment"
+    ]
+}
+```
+
+---
+
+### QUICK DECISION FLOWCHART FOR LLMs
 
 ```
-Need a new structure from scratch?
-  └─► pymatgen_prototype_builder
-
-Have an existing structure, want new chemistries?
-  ├─ Charge balance is critical (ionic material)?
-  │     └─► pymatgen_ion_exchange_generator
-  └─ Exploratory / charge balance not enforced?
-        └─► pymatgen_substitution_generator
-
-Structure has partial occupancies / is disordered?
-  ├─ Want ALL orderings / ground-state search / CE training?
-  │     └─► pymatgen_enumeration_generator  (max_cell_size ≤ 4 for binaries)
-  └─ Modelling disorder itself (solid solution / high-entropy)?
-        └─► pymatgen_sqs_generator
-
-Need point defect supercells?
-  └─► pymatgen_defect_generator
-
-Need an ensemble / perturbed copies of any structure?
-  └─► pymatgen_perturbation_generator
+ANALYZE user request
+    ↓
+Has existing structure? → YES: use it | NO: pymatgen_prototype_builder
+    ↓
+Want new chemistries? → YES: continue | NO: skip to disorder check
+    ↓
+Ionic + charge balance critical? → YES: pymatgen_ion_exchange_generator
+                                 → NO: pymatgen_substitution_generator
+    ↓
+Structures have partial occupancies? → NO: skip to defects
+                                     → YES: continue
+    ↓
+Need ALL orderings? → YES: pymatgen_enumeration_generator (max_cell_size ≤ 4)
+                   → NO: Modeling disorder? → YES: pymatgen_sqs_generator
+                                            → NO: skip
+    ↓
+Need defects? → YES: pymatgen_defect_generator (single ordered structure)
+             → NO: skip
+    ↓
+Need perturbations? → YES: pymatgen_perturbation_generator
+                   → NO: skip
+    ↓
+Store in ASE database with ase_store_result (output_format='ase' required!)
+    ↓
+DONE
 ```
 
 ---

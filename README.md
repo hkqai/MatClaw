@@ -15,17 +15,13 @@ MatClaw follows a layered architecture:
                   │
 ┌─────────────────▼───────────────────────┐
 │              Skills                     │  ← High-level workflows
-│  (orchestrate multiple tools)           │
+│     (orchestrate multiple tools)        │
 └─────────────────┬───────────────────────┘
                   │
 ┌─────────────────▼───────────────────────┐
-│           MCP Server                    │  ← Exposes tools via MCP
+│             MCP Server                  │  ← Exposes tools via MCP
 │   ┌─────────────────────────────────┐   │
-│   │  Tools:                         │   │
-│   │  • ASE (database operations)    │   │
-│   │  • Materials Project (queries)  │   │
-│   │  • PubChem (chemical search)    │   │
-│   │  • Pymatgen (structure gen)     │   │
+│   │           Tools                 │   │
 │   └─────────────────────────────────┘   │
 └─────────────────┬───────────────────────┘
                   │
@@ -40,24 +36,28 @@ MatClaw follows a layered architecture:
 
 | Category | Tools |
 |----------|-------|
-| **ASE** | Database management, structure storage/retrieval, property queries |
-| **Materials Project** | Material search, property data, synthesis recipes, detailed property data |
-| **PubChem** | Chemical compound search and properties |
-| **Pymatgen** | Structure generation (substitution, enumeration, defects, SQS, ion exchange, perturbation, prototypes) |
-| **Analysis** | Structure validation, composition analysis, structure analysis, stability analysis, structure fingerprinting |
-| **Selection** | Multi-objective ranking (Pareto, weighted sum, constraint-based) |
-| **URDF** | Validation of Unified Robot Description Format (URDF) files |
-| **Lula** | Generation of Lula robot description files for NVIDIA Isaac Sim |
+| **ASE** | Database management (`connect_or_create_db`, `store_result`, `query`, `get_atoms`, `list_databases`) |
+| **Materials Project** | Material search, property data, synthesis recipes, detailed property data (`search_materials`, `get_material_properties`, `get_detailed_property_data`, `search_recipe`) |
+| **PubChem** | Chemical compound search, properties, and safety data (`search_compounds`, `get_compound_properties`, `get_safety_data`) |
+| **Pymatgen** | Structure generation: substitution, enumeration, defects, SQS, ion exchange, perturbation, prototypes (7 tools) |
+| **Analysis** | Structure validation, composition analysis, structure analysis, stability analysis, structure fingerprinting (5 tools) |
+| **ML Prediction** | Machine learning predictions for structure relaxation, band gap, and formation energy (`ml_relax_structure`, `ml_predict_bandgap`, `ml_predict_eform`) |
+| **Selection** | Multi-objective ranking (Pareto, weighted sum, constraint-based) (`multi_objective_ranker`) |
+| **Synthesis Planning** | Recipe quantification and template-based route generation (`synthesis_recipe_quantifier`, `template_route_generator`) |
+| **URDF** | Validation, auto-fix, and inspection of Unified Robot Description Format files (`urdf_validate`, `urdf_fix`, `urdf_inspect`) |
+| **Lula** | Generation of Lula robot description files for NVIDIA Isaac Sim (`lula_generate_robot_description`) |
 
 ## Available Skills
 
 | Skill | Description |
 |-------|-------------|
-| **candidate-generator** | Integrated workflow for generating inorganic crystal structure candidates for high-throughput screening |
+| **candidate-generator** | Integrated workflow for generating inorganic crystal structure candidates using pymatgen (substitution, enumeration, defects, SQS, perturbations) |
+| **candidate-screener** | High-throughput screening workflow for filtering and enriching candidate structures with MP properties and stability analysis |
+| **synthesis-planner** | Literature-first synthesis route planning workflow using Materials Project Synthesis Explorer with template-based fallback |
 | **vasp-ase** | Professional workflow for setting up, executing, and debugging VASP DFT calculations using ASE |
-| **urdf-validator** | Workflow for validating and fixing robotics URDF models |
-| **nsys-optimizer** | Performance profiling and optimization for computational workflows |
-| **urdf-validator** | Pre-import validation and auto-fix for URDF files targeting Isaac Sim |
+| **urdf-validator** | Pre-import validation and auto-fix workflow for URDF files targeting Isaac Sim |
+| **lula-description-generator** | Workflow for generating Lula robot descriptions with automatic collision sphere placement for NVIDIA Isaac Sim |
+| **nsys-optimizer** | Performance profiling and optimization for computational workflows using NVIDIA Nsight Systems |
 
 ## Setup
 
