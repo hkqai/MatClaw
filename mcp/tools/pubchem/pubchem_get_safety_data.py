@@ -7,7 +7,7 @@ import pubchempy as pcp
 def pubchem_get_safety_data(
     cids: Annotated[
         int | List[int], 
-        Field(description="PubChem Compound ID(s). Can be a single CID or list of CIDs.")
+        Field(description="PubChem Compound ID(s). Pass a single integer (cids=702) or a list of integers (cids=[702, 2244]). Note: parameter name is 'cids' (plural) for both cases.")
     ],
     include_sections: Annotated[
         Optional[List[str]], 
@@ -35,10 +35,12 @@ def pubchem_get_safety_data(
         - Environmental impact: Assess aquatic toxicity and bioaccumulation potential
     
     Examples:
-        - All safety data: cids=2244 (aspirin - returns comprehensive safety info)
-        - GHS only: cids=702, include_sections=["ghs"]
-        - Multiple compounds: cids=[702, 2244, 5793], include_sections=["ghs", "toxicity"]
+        - Single CID, all sections: cids=2244 (aspirin - returns comprehensive safety info)
+        - Single CID, specific section: cids=702, include_sections=["ghs"]
+        - Multiple CIDs: cids=[702, 2244, 5793], include_sections=["ghs", "toxicity"]
         - Toxicity focus: cids=5793, include_sections=["toxicity", "health_hazards"]
+    
+    IMPORTANT: The parameter is named 'cids' (plural) regardless of whether you pass one or multiple CIDs.
     
     Important Hazard Codes to Screen For:
         - H300-H330: Acute toxicity (fatal/toxic if swallowed/inhaled/skin contact)
@@ -48,7 +50,8 @@ def pubchem_get_safety_data(
         - H200-H242: Physical hazards (explosives, flammables, oxidizers)
     
     Args:
-        cids: Single CID (int) or list of CIDs to retrieve safety data for
+        cids: Single integer (e.g., cids=702) or list of integers (e.g., cids=[702, 2244]).
+              Note: parameter name is 'cids' (plural) even for a single CID.
         include_sections: List of sections to retrieve. If None, returns all available.
     
     Returns:

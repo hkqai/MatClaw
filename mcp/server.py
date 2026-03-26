@@ -49,6 +49,10 @@ from tools.selection import (
 )
 from tools.synthesis_planning import (
     template_route_generator,
+    synthesis_recipe_quantifier,
+)
+from tools.ml_prediction import (
+    ml_relax_structure
 )
 
 # Set up logging
@@ -104,6 +108,10 @@ mcp.tool()(multi_objective_ranker)
 
 # Experiment planning tools
 mcp.tool()(template_route_generator)
+mcp.tool()(synthesis_recipe_quantifier)
+
+# Machine learning prediction tools
+mcp.tool()(ml_relax_structure)
 
 
 if __name__ == "__main__":
