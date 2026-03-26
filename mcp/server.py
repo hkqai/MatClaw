@@ -7,7 +7,8 @@ import logging
 from mcp.server.fastmcp import FastMCP
 from tools.pubchem import (
     pubchem_search_compounds, 
-    pubchem_get_compound_properties, 
+    pubchem_get_compound_properties,
+    pubchem_get_safety_data,
 )
 from tools.materials_project import (
     mp_search_materials, 
@@ -30,6 +31,19 @@ from tools.pymatgen import (
     pymatgen_enumeration_generator,
     pymatgen_defect_generator,
     pymatgen_sqs_generator,
+)
+from tools.analysis import (
+    structure_validator,
+    composition_analyzer,
+    structure_analyzer,
+    stability_analyzer,
+    structure_fingerprinter,
+)
+from tools.selection import (
+    multi_objective_ranker,
+)
+from tools.synthesis_planning import (
+    template_route_generator,
 )
 from tools.urdf import (
     urdf_validate,
@@ -54,6 +68,7 @@ mcp = FastMCP(name="matclaw-mcp-server")
 # Data retrieval tools
 mcp.tool()(pubchem_search_compounds)
 mcp.tool()(pubchem_get_compound_properties)
+mcp.tool()(pubchem_get_safety_data)
 mcp.tool()(mp_search_materials)
 mcp.tool()(mp_get_material_properties)
 mcp.tool()(mp_get_detailed_property_data)
@@ -74,6 +89,19 @@ mcp.tool()(pymatgen_perturbation_generator)
 mcp.tool()(pymatgen_enumeration_generator)
 mcp.tool()(pymatgen_defect_generator)
 mcp.tool()(pymatgen_sqs_generator)
+
+# Analysis tools for materials screening
+mcp.tool()(structure_validator)
+mcp.tool()(composition_analyzer)
+mcp.tool()(structure_analyzer)
+mcp.tool()(stability_analyzer)
+mcp.tool()(structure_fingerprinter)
+
+# Selection and ranking tools
+mcp.tool()(multi_objective_ranker)
+
+# Experiment planning tools
+mcp.tool()(template_route_generator)
 
 # URDF validation and fixing tools
 mcp.tool()(urdf_validate)

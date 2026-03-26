@@ -2,9 +2,12 @@ mcp
 python-dotenv
 pytest
 pubchempy
+requests
 mp-api
 pymatgen
 ase
+matminer
+dscribe
 lxml  # optional: used for pretty-printing fixed URDF XML
 trimesh  # lula tool: mesh loading and voxelisation for collision sphere generation
 scipy    # lula tool: Euclidean distance transform for sphere packing

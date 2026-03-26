@@ -344,3 +344,155 @@ class TestFieldsFilter:
             pytest.skip("No recipes returned to inspect fields filter")
         for recipe in result["recipes"]:
             assert "recipe_id" in recipe
+
+
+# Heating time filter
+@_requires_api_key
+class TestHeatingTimeFilter:
+
+    def test_heating_time_min_filter_returns_success(self):
+        """Filtering by heating_time_min returns success=True."""
+        result = mp_search_recipe(target_formula="LiFePO4", heating_time_min=2)
+        _skip_if_endpoint_unavailable(result)
+        assert result["success"] is True
+
+    def test_heating_time_max_filter_returns_success(self):
+        """Filtering by heating_time_max returns success=True."""
+        result = mp_search_recipe(target_formula="LiFePO4", heating_time_max=12)
+        _skip_if_endpoint_unavailable(result)
+        assert result["success"] is True
+
+    def test_heating_time_min_echoed_in_query(self):
+        """query dict reflects heating_time_min parameter."""
+        result = mp_search_recipe(target_formula="LiFePO4", heating_time_min=5)
+        _skip_if_endpoint_unavailable(result)
+        assert "heating_time_min" in result["query"]
+        assert result["query"]["heating_time_min"] == 5
+
+    def test_heating_time_max_echoed_in_query(self):
+        """query dict reflects heating_time_max parameter."""
+        result = mp_search_recipe(target_formula="LiFePO4", heating_time_max=10)
+        _skip_if_endpoint_unavailable(result)
+        assert "heating_time_max" in result["query"]
+        assert result["query"]["heating_time_max"] == 10
+
+    def test_heating_time_range_filter_returns_success(self):
+        """Filtering by both heating_time_min and heating_time_max returns success=True."""
+        result = mp_search_recipe(
+            target_formula="LiCoO2",
+            heating_time_min=2,
+            heating_time_max=12
+        )
+        _skip_if_endpoint_unavailable(result)
+        assert result["success"] is True
+
+
+# Format routes parameter
+@_requires_api_key
+class TestFormatRoutes:
+
+    def test_format_routes_false_returns_raw_recipes(self):
+        """format_routes=False returns raw recipe data structure."""
+        result = mp_search_recipe(target_formula="LiFePO4", format_routes=False, limit=3)
+        _skip_if_endpoint_unavailable(result)
+        assert result["success"] is True
+        assert "recipes" in result
+        assert "count" in result
+        # Raw recipes should have recipe structure, not route structure
+        if result["count"] > 0:
+            assert "recipe_id" in result["recipes"][0]
+            assert "routes" not in result  # routes key should not exist
+
+    def test_format_routes_true_returns_formatted_routes(self):
+        """format_routes=True returns standardized route structure."""
+        result = mp_search_recipe(target_formula="LiFePO4", format_routes=True, limit=3)
+        _skip_if_endpoint_unavailable(result)
+        assert result["success"] is True
+        assert "routes" in result
+        assert "n_routes" in result
+        assert "target_composition" in result
+        # Should not have raw recipes structure
+        assert "recipes" not in result or "routes" in result
+
+    def test_format_routes_true_route_structure(self):
+        """format_routes=True routes contain required route keys."""
+        result = mp_search_recipe(target_formula="LiFePO4", format_routes=True, limit=3)
+        _skip_if_endpoint_unavailable(result)
+        if result.get("n_routes", 0) == 0:
+            pytest.skip("No routes returned to inspect structure")
+        
+        route = result["routes"][0]
+        required_keys = [
+            "route_id", "source", "method", "confidence",
+            "feasibility_score", "precursors", "steps",
+            "temperature_range", "atmosphere_required", "basis"
+        ]
+        for key in required_keys:
+            assert key in route, f"Missing required key in route: {key}"
+
+    def test_format_routes_true_source_is_literature(self):
+        """format_routes=True routes have source='literature'."""
+        result = mp_search_recipe(target_formula="LiCoO2", format_routes=True, limit=3)
+        _skip_if_endpoint_unavailable(result)
+        if result.get("n_routes", 0) == 0:
+            pytest.skip("No routes returned to inspect source")
+        
+        for route in result["routes"]:
+            assert route["source"] == "literature"
+
+    def test_format_routes_true_confidence_high(self):
+        """format_routes=True routes have high confidence (0.85-0.95)."""
+        result = mp_search_recipe(target_formula="LiCoO2", format_routes=True, limit=3)
+        _skip_if_endpoint_unavailable(result)
+        if result.get("n_routes", 0) == 0:
+            pytest.skip("No routes returned to inspect confidence")
+        
+        for route in result["routes"]:
+            assert 0.85 <= route["confidence"] <= 0.95, \
+                f"Expected confidence 0.85-0.95, got {route['confidence']}"
+
+    def test_format_routes_requires_target_formula(self):
+        """format_routes=True requires target_formula to be provided."""
+        result = mp_search_recipe(keywords="solid-state", format_routes=True)
+        # This should fail because target_formula is required for format_routes=True
+        assert result["success"] is False
+        assert "error" in result
+        assert "target_formula" in result["error"].lower()
+
+    def test_format_routes_limit_controls_routes_count(self):
+        """limit parameter controls number of routes when format_routes=True."""
+        result = mp_search_recipe(target_formula="LiCoO2", format_routes=True, limit=2)
+        _skip_if_endpoint_unavailable(result)
+        assert result["success"] is True
+        # Should return at most 2 routes
+        assert result.get("n_routes", 0) <= 2
+        if "routes" in result:
+            assert len(result["routes"]) <= 2
+
+    def test_format_routes_with_temperature_filter(self):
+        """format_routes=True works with temperature_max filter."""
+        result = mp_search_recipe(
+            target_formula="LiFePO4",
+            format_routes=True,
+            temperature_max=900,
+            limit=3
+        )
+        _skip_if_endpoint_unavailable(result)
+        assert result["success"] is True
+        if result.get("n_routes", 0) > 0:
+            assert "routes" in result
+            # Verify feasibility_score is present (uses temperature_max for calculation)
+            assert "feasibility_score" in result["routes"][0]
+
+    def test_format_routes_includes_citation_info(self):
+        """format_routes=True routes include literature citation information."""
+        result = mp_search_recipe(target_formula="LiCoO2", format_routes=True, limit=3)
+        _skip_if_endpoint_unavailable(result)
+        if result.get("n_routes", 0) == 0:
+            pytest.skip("No routes returned to inspect citation info")
+        
+        route = result["routes"][0]
+        # Should have at least one of these citation-related fields
+        citation_fields = ["citation", "doi", "year", "recipe_id"]
+        has_citation = any(field in route for field in citation_fields)
+        assert has_citation, "Route missing citation information"
