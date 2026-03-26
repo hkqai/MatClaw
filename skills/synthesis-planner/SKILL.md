@@ -127,67 +127,289 @@ Generates template-based synthesis routes using Materials Project precursor data
 
 ---
 
-## MANDATORY Decision Logic Workflow
+## MANDATORY Synthesis Route Planning Algorithm
 
-**IMPORTANT: This is not optional. Always follow this exact sequence:**
+**IMPORTANT: This is not optional. Always follow this exact sequence.**
 
+### EXECUTION SUMMARY FOR LLMs
+
+**Complete order you MUST follow:**
+
+1. **STEP 1 - LITERATURE SEARCH**: Always try Materials Project first
+2. **DECISION POINT**: Check if literature routes found
+3. **STEP 2A - RETURN LITERATURE**: If found, return high-confidence routes
+4. **STEP 2B - TEMPLATE FALLBACK**: If NOT found, generate template routes with warnings
+
+**CRITICAL RULES:**
+- NEVER skip Step 1 (literature search)
+- NEVER use templates if literature routes exist
+- ALWAYS warn user when returning template routes
+- Templates require human review before execution
+
+---
+
+### STEP 1: LITERATURE SEARCH (MANDATORY FIRST STEP)
+
+**Input:** User request for synthesis route of material with formula X
+
+**Step 1.1:** Determine user's need for output format
 ```
-User Request: "Generate synthesis route for Material X"
-    ↓
-┌─────────────────────────────────────────────┐
-│ STEP 1 (REQUIRED): mp_search_recipe()      │
-│ Search Materials Project literature first   │
-│ TIP: Set format_routes based on your need  │
-└─────────────────────────────────────────────┘
-    ↓
-┌─────────────────────────────────┐
-│ Found literature recipes?       │
-│ (count > 0 or n_routes > 0)     │
-└─────────────────────────────────┘
-    │
-    ├─→ YES: Literature Path (HIGH CONFIDENCE)
-    │       ↓
-    │   ┌──────────────────────────────────────────────┐
-    │   │ Use format_routes=True in mp_search_recipe   │
-    │   │   mp_search_recipe(                          │
-    │   │       target_formula="NiO",                  │
-    │   │       format_routes=True                     │
-    │   │   )                                          │
-    │   │ → Returns standardized routes directly       │
-    │   │ → Single efficient step                      │
-    │   └──────────────────────────────────────────────┘
-    │       ↓
-    │   ┌──────────────────────────────────────────────┐
-    │   │ Return: Literature Routes                    │
-    │   │ • Source: "literature"                       │
-    │   │ • Confidence: 0.90 (high)                    │
-    │   │ • Requires Review: Minimal                   │
-    │   │ • Basis: "206 literature recipes"            │
-    │   └──────────────────────────────────────────────┘
-    │
-    └─→ NO: Template Path (LOW CONFIDENCE - LAST RESORT)
-            ↓
-        ┌──────────────────────────────────────────────┐
-        │ STEP 3 (FALLBACK ONLY):                     │
-        │ template_route_generator()                   │
-        │    - Query MP for precursors used            │
-        │    - Apply heuristic temperature/time rules  │
-        │    - Generate standardized steps             │
-        │ WARNING: Only use if Step 1 returned 0 hits  │
-        └──────────────────────────────────────────────┘
-            ↓
-        ┌──────────────────────────────────────────────┐
-        │ Return: Template Routes + WARNINGS           │
-        │ • Source: "template_with_mp_precursors"      │
-        │ • Confidence: 0.40 (low)                     │
-        │ • Requires Review: True                      │
-        │ • Warning: "No literature precedent found"   │
-        │ • Recommendation: "Validate before use"      │
-        │                                              │
-        │ INFORM USER: This is unvalidated, try        │
-        │ literature search for similar materials      │
-        └──────────────────────────────────────────────┘
+IF user needs standardized routes for synthesis planning:
+    SET format_routes = True
+ELSE IF user needs raw recipe data for analysis:
+    SET format_routes = False
+ELSE:
+    # Default to standardized routes
+    SET format_routes = True
 ```
+
+**Step 1.2:** Extract any constraints from user request
+```
+SET constraints = {
+    temperature_max: extract_from_request() OR None,
+    heating_time_max: extract_from_request() OR None,
+    synthesis_type: extract_from_request() OR None,
+    keywords: extract_keywords() OR None
+}
+```
+
+**Step 1.3:** Search Materials Project literature database
+```
+CALL mp_search_recipe(
+    target_formula=X,
+    format_routes=format_routes,
+    limit=10,  # Or user-specified limit
+    temperature_max=constraints.temperature_max,
+    heating_time_max=constraints.heating_time_max,
+    synthesis_type=constraints.synthesis_type
+)
+
+STORE result in mp_result
+```
+
+**Step 1.4:** Check search outcome
+```
+IF format_routes == True:
+    SET found_routes = (mp_result.success AND mp_result.n_routes > 0)
+ELSE:
+    SET found_routes = (mp_result.success AND mp_result.count > 0)
+
+IF found_routes:
+    GOTO STEP 2A (Literature path)
+ELSE:
+    GOTO STEP 2B (Template fallback)
+```
+
+---
+
+### STEP 2A: RETURN LITERATURE ROUTES (HIGH CONFIDENCE PATH)
+
+**Condition:** Only execute if Step 1.4 found literature routes
+
+**Step 2A.1:** Extract route information
+```
+IF format_routes == True:
+    SET routes = mp_result.routes
+    SET route_count = mp_result.n_routes
+    SET original_count = mp_result.original_count
+ELSE:
+    SET recipes = mp_result.recipes
+    SET recipe_count = mp_result.count
+```
+
+**Step 2A.2:** Validate route quality
+```
+FOR each route in routes:
+    # Routes from literature are high confidence
+    ASSERT route.source == "literature"
+    ASSERT route.confidence >= 0.85
+    
+    # Minimal review required
+    SET route.requires_intensive_review = False
+    SET route.autonomous_execution_approved = True  # With standard safety checks
+```
+
+**Step 2A.3:** Format user message
+```
+MESSAGE = "Found {original_count} literature synthesis recipes for {target_formula} in Materials Project. "
+MESSAGE += "Generated {route_count} validated routes based on actual experimental procedures. "
+
+# Describe recommended route
+best_route = routes[0]
+MESSAGE += f"Recommended route uses {format_precursors(best_route.precursors)}, "
+MESSAGE += f"{best_route.steps[main_step].description}. "
+MESSAGE += f"This is a well-established synthesis with high confidence ({best_route.confidence:.2f})."
+```
+
+**Step 2A.4:** Return result
+```
+RETURN {
+    "success": True,
+    "source": "literature",
+    "confidence": "high",
+    "routes": routes,
+    "original_recipe_count": original_count,
+    "route_count": route_count,
+    "requires_review": "minimal",
+    "autonomous_execution": "approved_with_safety_checks",
+    "user_message": MESSAGE
+}
+```
+
+---
+
+### STEP 2B: TEMPLATE FALLBACK (LOW CONFIDENCE PATH)
+
+**Condition:** Only execute if Step 1.4 found NO literature routes
+
+**WARNING:** This path generates unvalidated heuristic routes that REQUIRE human review
+
+**Step 2B.1:** Log literature search failure
+```
+LOG "WARNING: No literature routes found for {target_formula}"
+LOG "Falling back to template-based generation (low confidence)"
+```
+
+**Step 2B.2:** Determine synthesis method
+```
+IF user specified method:
+    SET method = user_specified_method
+ELSE IF constraints.temperature_max < 400:
+    SET method = "hydrothermal"  # Prefer low-temp method
+ELSE:
+    SET method = "auto"  # Let template generator decide
+```
+
+**Step 2B.3:** Generate template routes
+```
+CALL template_route_generator(
+    target_material={"composition": target_formula},
+    synthesis_method=method,
+    constraints=constraints
+)
+
+STORE result in template_result
+```
+
+**Step 2B.4:** Validate template output and add warnings
+```
+FOR each route in template_result.routes:
+    # Template routes are low confidence
+    ASSERT route.source == "template_with_mp_precursors"
+    ASSERT route.confidence <= 0.50
+    
+    # Add mandatory warnings
+    IF route.warnings is None:
+        SET route.warnings = []
+    
+    APPEND "No literature precedent found for this composition" to route.warnings
+    APPEND "Template based on heuristics - experimental validation required" to route.warnings
+    APPEND "DO NOT execute without expert review" to route.warnings
+    
+    # Flag for mandatory review
+    SET route.requires_review = True
+    SET route.requires_expert_validation = True
+    SET route.autonomous_execution_approved = False
+```
+
+**Step 2B.5:** Format user warning message
+```
+MESSAGE = "⚠️ WARNING: No literature synthesis found for {target_formula}. "
+MESSAGE += "Generated template-based route using heuristics and precursor data from similar materials. "
+MESSAGE += "\n\n**This route has NOT been validated experimentally** "
+MESSAGE += "(confidence: {route.confidence:.2f}) and requires expert review before execution.\n\n"
+MESSAGE += "Recommended starting point: {format_precursors(route.precursors)}, "
+MESSAGE += "{route.steps[main_step].description}.\n\n"
+MESSAGE += "**SAFETY REQUIREMENTS:**\n"
+MESSAGE += "1. Expert review by materials scientist\n"
+MESSAGE += "2. Literature search for similar materials\n"
+MESSAGE += "3. Small-scale test (mg quantities) first\n"
+MESSAGE += "4. Phase characterization plan (XRD, etc.)\n\n"
+MESSAGE += "Consider searching for related compositions with known synthesis routes."
+```
+
+**Step 2B.6:** Return result with warnings
+```
+RETURN {
+    "success": True,
+    "source": "template",
+    "confidence": "low",
+    "routes": template_result.routes,
+    "requires_review": "MANDATORY",
+    "autonomous_execution": "FORBIDDEN",
+    "warnings": [
+        "No literature precedent found",
+        "Template-based heuristics only",
+        "Expert validation required before execution",
+        "High risk of incorrect conditions or wrong phase"
+    ],
+    "safety_requirements": [
+        "Expert review required",
+        "Small-scale test mandatory",
+        "Characterization plan needed"
+    ],
+    "user_message": MESSAGE
+}
+```
+
+---
+
+### ERROR HANDLING
+
+**Error Type 1: MP API failure in Step 1**
+```
+IF mp_search_recipe fails with NetworkError:
+    TRY:
+        RETRY with exponential backoff (max 3 attempts)
+    EXCEPT all retries failed:
+        RETURN {
+            "success": False,
+            "error": "Materials Project API unavailable",
+            "recommendation": "Try again later or use cached data if available"
+        }
+```
+
+**Error Type 2: Invalid formula**
+```
+IF mp_search_recipe fails with FormulaError:
+    RETURN {
+        "success": False,
+        "error": "Invalid chemical formula: {target_formula}",
+        "recommendation": "Check formula formatting (e.g., 'LiCoO2' not 'Li1Co1O2')"
+    }
+```
+
+**Error Type 3: Template generation failure**
+```
+IF template_route_generator fails:
+    RETURN {
+        "success": False,
+        "error": "Cannot generate template route",
+        "recommendation": "Search for similar materials with known synthesis or consult literature"
+    }
+```
+
+---
+
+### CONFIDENCE SCORING RULES
+
+**High Confidence (0.85-1.0):**
+- Source: Literature from Materials Project
+- Basis: Published experimental procedures
+- Validation: Peer-reviewed by community
+- Action: Minimal review, approved for autonomous execution
+
+**Medium Confidence (0.50-0.84):**
+- Source: ML predictions OR partially validated templates
+- Basis: Data-driven models with some experimental support
+- Validation: Statistical validation on similar materials
+- Action: Moderate review, test batch recommended
+
+**Low Confidence (0.0-0.49):**
+- Source: Pure heuristic templates
+- Basis: Generic rules not validated for this material
+- Validation: None
+- Action: MANDATORY expert review, small-scale testing REQUIRED
 
 ---
 
