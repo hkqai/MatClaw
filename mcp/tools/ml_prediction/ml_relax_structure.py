@@ -167,6 +167,17 @@ def ml_relax_structure(
                     f"Install with: pip install matgl pymatgen ase"
         }
     
+    # Check if PYG (PyTorch Geometric) is available (required for TensorNet models)
+    try:
+        import torch_geometric
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"PYG (PyTorch Geometric) backend not available: {e}. "
+                    f"Structure relaxation with TensorNet models requires PYG. "
+                    f"Install with: pip install torch-geometric"
+        }
+    
     try:
         # Parse input structure
         if isinstance(input_structure, dict):
@@ -199,6 +210,9 @@ def ml_relax_structure(
         initial_structure_dict = structure.as_dict()
         initial_lattice = structure.lattice
         initial_volume = initial_lattice.volume
+        
+        # Set backend for MatGL (TensorNet models require PYG backend)
+        matgl.set_backend('PYG')
         
         # Load ML potential model
         try:

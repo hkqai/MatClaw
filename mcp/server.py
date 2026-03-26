@@ -47,7 +47,9 @@ from tools.synthesis_planning import (
     synthesis_recipe_quantifier,
 )
 from tools.ml_prediction import (
-    ml_relax_structure
+    ml_relax_structure,
+    ml_predict_bandgap,
+    ml_predict_eform
 )
 from tools.urdf import (
     urdf_validate,
@@ -110,6 +112,8 @@ mcp.tool()(synthesis_recipe_quantifier)
 
 # Machine learning prediction tools
 mcp.tool()(ml_relax_structure)
+mcp.tool()(ml_predict_bandgap)
+mcp.tool()(ml_predict_eform)
 
 # URDF validation and fixing tools
 mcp.tool()(urdf_validate)
