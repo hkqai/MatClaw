@@ -52,7 +52,9 @@ from tools.synthesis_planning import (
     synthesis_recipe_quantifier,
 )
 from tools.ml_prediction import (
-    ml_relax_structure
+    ml_relax_structure,
+    ml_predict_bandgap,
+    ml_predict_eform
 )
 
 # Set up logging
@@ -112,6 +114,8 @@ mcp.tool()(synthesis_recipe_quantifier)
 
 # Machine learning prediction tools
 mcp.tool()(ml_relax_structure)
+mcp.tool()(ml_predict_bandgap)
+mcp.tool()(ml_predict_eform)
 
 
 if __name__ == "__main__":
