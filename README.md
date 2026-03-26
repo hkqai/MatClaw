@@ -44,6 +44,8 @@ MatClaw follows a layered architecture:
 | **Materials Project** | Material search, property data, synthesis recipes |
 | **PubChem** | Chemical compound search and properties |
 | **Pymatgen** | Structure generation (substitution, enumeration, defects, SQS, ion exchange, perturbation, prototypes) |
+| **URDF** | Validation of Unified Robot Description Format (URDF) files |
+| **Lula** | Generation of Lula robot description files for NVIDIA Isaac Sim |
 
 ## Available Skills
 
@@ -51,6 +53,7 @@ MatClaw follows a layered architecture:
 |-------|-------------|
 | **candidate-generator** | Integrated workflow for generating inorganic crystal structure candidates for high-throughput screening |
 | **nsys-optimizer** | Performance profiling and optimization for computational workflows |
+| **urdf-validator** | Pre-import validation and auto-fix for URDF files targeting Isaac Sim |
 
 ## Setup
 

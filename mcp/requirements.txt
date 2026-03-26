@@ -6,6 +6,10 @@ mp-api
 pymatgen
 ase
 lxml  # optional: used for pretty-printing fixed URDF XML
+trimesh  # lula tool: mesh loading and voxelisation for collision sphere generation
+scipy    # lula tool: Euclidean distance transform for sphere packing
+pymeshfix  # optional, lula tool: improves mesh repair quality (falls back to trimesh)
+pyyaml     # lula tool: YAML output (also transitively required by pymatgen)
 # enumlib (enum.x) is required for pymatgen_enumeration_generator but is NOT on PyPI.
 # It is installed automatically by setup.sh (via conda) on Linux/macOS/WSL.
 # Manual install: conda install -c conda-forge enumlib

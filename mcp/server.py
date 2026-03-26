@@ -36,6 +36,9 @@ from tools.urdf import (
     urdf_fix,
     urdf_inspect,
 )
+from tools.lula import (
+    lula_generate_robot_description,
+)
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -76,6 +79,9 @@ mcp.tool()(pymatgen_sqs_generator)
 mcp.tool()(urdf_validate)
 mcp.tool()(urdf_fix)
 mcp.tool()(urdf_inspect)
+
+# Lula robot description generation
+mcp.tool()(lula_generate_robot_description)
 
 
 if __name__ == "__main__":

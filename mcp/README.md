@@ -169,3 +169,7 @@ python -m pytest tests/pymatgen/test_enumeration_generator.py -v
 | `pymatgen_ion_exchange_generator` | Generate ion-exchanged variants of a structure |
 | `pymatgen_perturbation_generator` | Randomly perturb atomic positions and lattice |
 | `pymatgen_enumeration_generator` | Enumerate ordered supercell decorations of disordered structures (**requires enumlib**) |
+| `urdf_validate` | Validate a URDF file for Isaac Sim / USD compatibility — checks USD naming violations, duplicate materials, joint limits, missing inertial properties, collision geometry gaps, and broken mesh references |
+| `urdf_fix` | Auto-fix URDF issues for Isaac Sim / USD compatibility (USD-safe naming, duplicate materials, joint limits, missing inertials); always writes to a new file and returns a name-mapping dict |
+| `urdf_inspect` | Inspect a URDF's structure: kinematic tree, mass distribution, mesh files, materials, and joint breakdown |
+| `lula_generate_robot_description` | Generate a Lula robot description YAML from a URDF for Isaac Sim motion planning (CuMotion / RMPflow / Lula); automates collision-sphere placement via voxelisation and distance-transform sphere packing |
