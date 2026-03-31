@@ -44,6 +44,8 @@ MatClaw follows a layered architecture:
 | **ML Prediction** | Machine learning predictions for structure relaxation, band gap, and formation energy (`ml_relax_structure`, `ml_predict_bandgap`, `ml_predict_eform`) |
 | **Selection** | Multi-objective ranking (Pareto, weighted sum, constraint-based) (`multi_objective_ranker`) |
 | **Synthesis Planning** | Recipe quantification and template-based route generation (`synthesis_recipe_quantifier`, `template_route_generator`) |
+| **Active Learning** | ARROWS campaign management for synthesis optimization (`arrows_prepare_campaign`, `arrows_suggest_experiment`, `arrows_record_result`) |
+| **Characterization** | Automated phase identification from powder diffraction patterns using deep learning (`xrd_analyze_pattern`) |
 | **URDF** | Validation, auto-fix, and inspection of Unified Robot Description Format files (`urdf_validate`, `urdf_fix`, `urdf_inspect`) |
 | **Lula** | Generation of Lula robot description files for NVIDIA Isaac Sim (`lula_generate_robot_description`) |
 
@@ -54,6 +56,7 @@ MatClaw follows a layered architecture:
 | **candidate-generator** | Integrated workflow for generating inorganic crystal structure candidates using pymatgen (substitution, enumeration, defects, SQS, perturbations) |
 | **candidate-screener** | High-throughput screening workflow for filtering and enriching candidate structures with MP properties and stability analysis |
 | **synthesis-planner** | Literature-first synthesis route planning workflow using Materials Project Synthesis Explorer with template-based fallback |
+| **active-learning** | Autonomous synthesis optimization using ARROWS with automated XRD characterization feedback loop |
 | **vasp-ase** | Professional workflow for setting up, executing, and debugging VASP DFT calculations using ASE |
 | **urdf-validator** | Pre-import validation and auto-fix workflow for URDF files targeting Isaac Sim |
 | **lula-description-generator** | Workflow for generating Lula robot descriptions with automatic collision sphere placement for NVIDIA Isaac Sim |

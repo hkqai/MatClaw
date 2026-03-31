@@ -21,8 +21,8 @@ trimesh  # lula tool: mesh loading and voxelisation for collision sphere generat
 scipy    # lula tool: Euclidean distance transform for sphere packing
 pymeshfix  # optional, lula tool: improves mesh repair quality (falls back to trimesh)
 pyyaml     # lula tool: YAML output (also transitively required by pymatgen)
-
-
+autoXRD
+git+https://github.com/njszym/ARROWS.git
 
 
 
