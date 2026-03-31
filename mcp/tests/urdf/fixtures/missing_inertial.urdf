@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<robot name="missing_inertial_robot">
+  <link name="base_link">
+    <visual>
+      <geometry><box size="0.1 0.1 0.1"/></geometry>
+    </visual>
+    <collision>
+      <geometry><box size="0.1 0.1 0.1"/></geometry>
+    </collision>
+    <!-- Missing inertial! -->
+  </link>
+
+  <link name="link_zero_mass">
+    <visual>
+      <geometry><cylinder length="0.3" radius="0.02"/></geometry>
+    </visual>
+    <collision>
+      <geometry><cylinder length="0.3" radius="0.02"/></geometry>
+    </collision>
+    <inertial>
+      <mass value="0.0"/>
+      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+    </inertial>
+  </link>
+
+  <link name="empty_link"/>
+
+  <joint name="base_to_zero" type="fixed">
+    <parent link="base_link"/>
+    <child link="link_zero_mass"/>
+  </joint>
+  <joint name="base_to_empty" type="fixed">
+    <parent link="base_link"/>
+    <child link="empty_link"/>
+  </joint>
+</robot>

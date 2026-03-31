@@ -20,7 +20,6 @@ def mp_search_recipe(
             "Use reduced formulas without charge."
         )
     ] = None,
-    
     precursor_formulas: Annotated[
         Optional[str | List[str]],
         Field(
@@ -30,7 +29,6 @@ def mp_search_recipe(
             "Finds recipes that use these specific precursors."
         )
     ] = None,
-    
     elements: Annotated[
         Optional[List[str]],
         Field(
@@ -40,7 +38,6 @@ def mp_search_recipe(
             "Use element symbols."
         )
     ] = None,
-    
     keywords: Annotated[
         Optional[str | List[str]],
         Field(
@@ -51,8 +48,7 @@ def mp_search_recipe(
             "Can be single keyword or list."
         )
     ] = None,
-    
-    reaction_type: Annotated[
+    synthesis_type: Annotated[
         Optional[str],
         Field(
             default=None,
@@ -61,7 +57,6 @@ def mp_search_recipe(
             "'sol_gel', 'combustion', 'precipitation', 'coprecipitation', 'melting'."
         )
     ] = None,
-    
     temperature_min: Annotated[
         Optional[float],
         Field(
@@ -71,7 +66,6 @@ def mp_search_recipe(
             "Examples: 600 for high-temperature solid-state, 150 for hydrothermal."
         )
     ] = None,
-    
     temperature_max: Annotated[
         Optional[float],
         Field(
@@ -81,7 +75,15 @@ def mp_search_recipe(
             "Use to find low-temperature synthesis routes."
         )
     ] = None,
-    
+    heating_time_min: Annotated[
+        Optional[float],
+        Field(
+            default=None,
+            ge=0,
+            description="Minimum heating/reaction time in hours. "
+            "Use to find synthesis protocols with minimum required heating duration (e.g., heating_time_min=2 for > 2 hours)."
+        )
+    ] = None,
     heating_time_max: Annotated[
         Optional[float],
         Field(
@@ -91,7 +93,6 @@ def mp_search_recipe(
             "Use to find fast synthesis protocols (e.g., heating_time_max=2 for < 2 hours)."
         )
     ] = None,
-    
     year_min: Annotated[
         Optional[int],
         Field(
@@ -102,7 +103,6 @@ def mp_search_recipe(
             "Examples: 2020 for recent recipes, 2015 for last decade."
         )
     ] = None,
-    
     doi: Annotated[
         Optional[str],
         Field(
@@ -111,17 +111,16 @@ def mp_search_recipe(
             "Example: '10.1021/jacs.5b00620'"
         )
     ] = None,
-    
     limit: Annotated[
         int,
         Field(
             default=10,
             ge=1,
-            le=100,
-            description="Maximum number of synthesis recipes to return (1-100). Default: 10."
+            le=30,
+            description="Maximum number of synthesis recipes to return (1-30). "
+            "Use smaller values where possible to reduce query time. Default: 10."
         )
     ] = 10,
-    
     fields: Annotated[
         Optional[List[str]],
         Field(
@@ -132,7 +131,15 @@ def mp_search_recipe(
             "'doi', 'citation', 'year', 'authors'. "
             "If None, returns all available fields."
         )
-    ] = None
+    ] = None,
+    format_routes: Annotated[
+        bool,
+        Field(
+            default=False,
+            description="If True, automatically converts MP recipes to standardized synthesis routes. "
+            "Requires target_formula to be provided (uses first formula if list)."
+        )
+    ] = False
 ) -> Dict[str, Any]:
     """
     Search Materials Project Synthesis Explorer for experimental synthesis recipes.
@@ -141,9 +148,12 @@ def mp_search_recipe(
     materials extracted from research papers. Each recipe includes target materials,
     precursors, reaction conditions, temperatures, times, and literature citations.
     
+    Routes from this tool have high confidence because they are based on actual published 
+    experimental procedures.
+    
     Use this tool to:
         - Find proven synthesis routes for specific materials
-        - Discover alternative synthesis methods
+        - Discover alternative synthesis methods from literature
         - Identify required precursors and conditions
         - Access original research papers via DOI
         - Compare synthesis approaches from different sources
@@ -165,7 +175,7 @@ def mp_search_recipe(
     
     Examples:
         Find LiFePO4 synthesis routes:
-            target_formula="LiFePO4", limit=20
+            target_formula="LiFePO4", limit=10
         
         Find low-temperature hydrothermal methods:
             keywords="hydrothermal", temperature_max=250
@@ -181,14 +191,16 @@ def mp_search_recipe(
         precursor_formulas: Starting material/precursor formula(s)
         elements: Required elements in target product
         keywords: Synthesis method keywords or conditions
-        reaction_type: Type of synthesis reaction
+        synthesis_type: Type of synthesis reaction
         temperature_min: Minimum synthesis temperature (°C)
         temperature_max: Maximum synthesis temperature (°C)
+        heating_time_min: Minimum heating time (hours)
         heating_time_max: Maximum heating time (hours)
         year_min: Minimum publication year
         doi: Specific publication DOI
-        limit: Maximum number of recipes to return (1-100)
+        limit: Maximum number of recipes to return (1-30)
         fields: Specific data fields to return
+        format_routes: If True, converts recipes to standardized route format (uses target_formula)
     
     Returns:
         Dictionary containing:
@@ -245,12 +257,14 @@ def mp_search_recipe(
             query_params["elements"] = elements
         if keywords:
             query_params["keywords"] = keywords
-        if reaction_type:
-            query_params["reaction_type"] = reaction_type
+        if synthesis_type:
+            query_params["synthesis_type"] = synthesis_type
         if temperature_min is not None:
             query_params["temperature_min"] = temperature_min
         if temperature_max is not None:
             query_params["temperature_max"] = temperature_max
+        if heating_time_min is not None:
+            query_params["heating_time_min"] = heating_time_min
         if heating_time_max is not None:
             query_params["heating_time_max"] = heating_time_max
         if year_min is not None:
@@ -289,9 +303,9 @@ def mp_search_recipe(
                         else:
                             search_kwargs['keywords'] = keywords
                     
-                    # synthesis_type maps to reaction_type parameter
-                    if reaction_type:
-                        search_kwargs['synthesis_type'] = [reaction_type]
+                    # synthesis_type parameter
+                    if synthesis_type:
+                        search_kwargs['synthesis_type'] = [synthesis_type]
                     
                     # Temperature parameters need condition_heating_ prefix
                     if temperature_min is not None:
@@ -301,6 +315,9 @@ def mp_search_recipe(
                         search_kwargs['condition_heating_temperature_max'] = temperature_max
                     
                     # Time parameters need condition_heating_ prefix
+                    if heating_time_min is not None:
+                        search_kwargs['condition_heating_time_min'] = heating_time_min
+                    
                     if heating_time_max is not None:
                         search_kwargs['condition_heating_time_max'] = heating_time_max
                     
@@ -397,7 +414,8 @@ def mp_search_recipe(
                 if len(recipes) == 0:
                     warnings.append("No synthesis recipes found matching the search criteria. Try broadening your search or using different keywords.")
                 
-                return {
+                # Build base result
+                base_result = {
                     "success": True,
                     "query": query_params,
                     "count": len(recipes),
@@ -405,6 +423,102 @@ def mp_search_recipe(
                     "warnings": warnings if warnings else None,
                     "message": f"Found {len(recipes)} synthesis recipe(s) matching search criteria"
                 }
+                
+                # Apply route formatting if requested
+                if format_routes:
+                    # Auto-infer target_composition from target_formula
+                    if not target_formula:
+                        return {
+                            "success": False,
+                            "query": query_params,
+                            "count": len(recipes),
+                            "recipes": recipes,
+                            "error": "target_formula must be provided when format_routes=True"
+                        }
+                    
+                    # Use first formula if list, otherwise use the string
+                    target_composition = target_formula[0] if isinstance(target_formula, list) else target_formula
+                    
+                    routes = []
+                    filtered_count = 0
+                    conversion_warnings = []
+                    
+                    
+                    for idx, recipe in enumerate(recipes, 1):
+                        try:
+                            # Extract basic information
+                            temperature = recipe.get("temperature_celsius")
+                            time_hours = recipe.get("heating_time_hours")
+                            
+                            # Extract precursors
+                            precursors_data = recipe.get("precursors", [])
+                            precursors = _extract_precursors(precursors_data)
+                            
+                            # Extract synthesis steps
+                            operations = recipe.get("operations")
+                            steps = _extract_steps(operations, temperature, time_hours)
+                            
+                            # Determine synthesis method
+                            method = _infer_synthesis_method(recipe)
+                            
+                            # Calculate scores
+                            confidence = 0.90  # Literature routes have high confidence
+                            feasibility = _calculate_feasibility_score(
+                                temperature or 800,
+                                time_hours or 12,
+                                temperature_max or float('inf'),
+                                heating_time_max or float('inf')
+                            )
+                            
+                            # Build standardized route
+                            route = {
+                                "route_id": idx,
+                                "source": "literature",
+                                "method": method,
+                                "confidence": confidence,
+                                "feasibility_score": feasibility,
+                                "precursors": precursors,
+                                "steps": steps,
+                                "temperature_range": f"{temperature}°C" if temperature else "See steps",
+                                "total_time_estimate": f"~{time_hours:.1f} hours" if time_hours else "See steps",
+                                "atmosphere_required": recipe.get("atmosphere") or "not specified",
+                                "basis": "Literature-derived from Materials Project",
+                                "citation": recipe.get("citation"),
+                                "doi": recipe.get("doi"),
+                                "year": recipe.get("year"),
+                                "recipe_id": recipe.get("recipe_id")
+                            }
+                            
+                            routes.append(route)
+                            
+                        except Exception as e:
+                            conversion_warnings.append(f"Failed to convert recipe {idx}: {str(e)}")
+                            continue
+                    
+                    # Return formatted routes
+                    if not routes:
+                        return {
+                            "success": False,
+                            "target_composition": target_composition,
+                            "n_routes": 0,
+                            "routes": [],
+                            "filtered_count": filtered_count,
+                            "error": "No recipes could be converted. Check constraints or recipe format.",
+                            "warnings": conversion_warnings + (warnings or [])
+                        }
+                    
+                    return {
+                        "success": True,
+                        "target_composition": target_composition,
+                        "n_routes": len(routes),
+                        "routes": routes,
+                        "filtered_count": filtered_count,
+                        "original_count": len(recipes),
+                        "warnings": (conversion_warnings + (warnings or [])) if conversion_warnings or warnings else None,
+                        "message": f"Successfully converted {len(routes)} recipe(s) to standardized routes"
+                    }
+                
+                return base_result
                 
             except AttributeError as e:
                 return {
@@ -425,3 +539,235 @@ def mp_search_recipe(
             "recipes": [],
             "error": f"Unexpected error searching synthesis recipes: {str(e)}"
         }
+
+
+
+def _extract_precursors(precursors_data: Any) -> List[Dict[str, Any]]:
+    """Extract and standardize precursor information."""
+    precursors = []
+    
+    if not precursors_data:
+        return precursors
+    
+    if isinstance(precursors_data, list):
+        for prec in precursors_data:
+            if isinstance(prec, dict):
+                # Handle MP format (material_formula, material_string, etc.)
+                compound = (
+                    prec.get("material_formula") or 
+                    prec.get("formula") or 
+                    prec.get("name") or 
+                    prec.get("material_string") or 
+                    str(prec)
+                )
+                
+                precursors.append({
+                    "compound": compound,
+                    "amount": prec.get("amount"),
+                    "form": prec.get("form") or prec.get("material_name") or "unspecified",
+                    "purity": prec.get("purity")
+                })
+            elif isinstance(prec, str):
+                precursors.append({
+                    "compound": prec,
+                    "amount": None,
+                    "form": "unspecified",
+                    "purity": None
+                })
+            else:
+                precursors.append({
+                    "compound": str(prec),
+                    "amount": None,
+                    "form": "unspecified",
+                    "purity": None
+                })
+    
+    return precursors
+
+
+def _extract_steps(operations: Any, temperature: Optional[float], time_hours: Optional[float]) -> List[Dict[str, Any]]:
+    """Extract and standardize synthesis steps from operations."""
+    steps = []
+    
+    if operations:
+        if isinstance(operations, str):
+            # Parse string description into steps
+            steps = _parse_operations_string(operations, temperature, time_hours)
+        elif isinstance(operations, list):
+            # List of operation dictionaries (MP format)
+            for i, op in enumerate(operations, 1):
+                if isinstance(op, dict):
+                    # Extract conditions from MP format
+                    conditions = op.get("conditions", {})
+                    
+                    # Get temperature from conditions or top level
+                    temp_data = conditions.get("heating_temperature", [])
+                    temp_c = None
+                    if temp_data and isinstance(temp_data, list) and len(temp_data) > 0:
+                        temp_info = temp_data[0]
+                        if isinstance(temp_info, dict):
+                            temp_c = temp_info.get("min_value") or temp_info.get("values", [None])[0]
+                    
+                    # Get time from conditions
+                    time_data = conditions.get("heating_time", [])
+                    duration = None
+                    if time_data and isinstance(time_data, list) and len(time_data) > 0:
+                        time_info = time_data[0]
+                        if isinstance(time_info, dict):
+                            duration = time_info.get("min_value") or time_info.get("values", [None])[0]
+                            time_unit = time_info.get("units", "h")
+                            # Convert days to hours if needed
+                            if duration and time_unit == "day":
+                                duration = duration * 24
+                    
+                    # Get atmosphere
+                    atmosphere = conditions.get("heating_atmosphere", [])
+                    if atmosphere and isinstance(atmosphere, list) and len(atmosphere) > 0:
+                        atmosphere = atmosphere[0]
+                    else:
+                        atmosphere = None
+                    
+                    # Build step description
+                    action = op.get("type", "process")
+                    token = op.get("token", "")
+                    
+                    desc_parts = [token] if token else []
+                    if temp_c:
+                        desc_parts.append(f"at {temp_c}°C")
+                    if duration:
+                        unit = "h" if time_unit != "day" else "h"
+                        desc_parts.append(f"for {duration} {unit}")
+                    if atmosphere:
+                        desc_parts.append(f"in {atmosphere}")
+                    
+                    description = " ".join(desc_parts) if desc_parts else str(op)
+                    
+                    steps.append({
+                        "step": i,
+                        "action": action,
+                        "description": description,
+                        "temperature_c": temp_c,
+                        "duration": duration,
+                        "atmosphere": atmosphere,
+                        "conditions": conditions if conditions else None
+                    })
+                else:
+                    steps.append({
+                        "step": i,
+                        "action": "process",
+                        "description": str(op)
+                    })
+        else:
+            # Single operation
+            steps = [{
+                "step": 1,
+                "action": "synthesis",
+                "description": str(operations)
+            }]
+    
+    # If no detailed operations, create generic step
+    if not steps:
+        steps = [{
+            "step": 1,
+            "action": "synthesis",
+            "description": f"Synthesis at {temperature}°C for {time_hours} hours" if temperature and time_hours else "Follow synthesis procedure",
+            "temperature_c": temperature,
+            "duration_h": time_hours
+        }]
+    
+    return steps
+
+
+def _parse_operations_string(operations: str, temperature: Optional[float], time_hours: Optional[float]) -> List[Dict[str, Any]]:
+    """Parse operations text into structured steps."""
+    import re
+    
+    steps = []
+    
+    # Split by common delimiters
+    sentences = operations.replace(". ", ".\n").replace("; ", ";\n").split("\n")
+    
+    for i, sentence in enumerate(sentences, 1):
+        sentence = sentence.strip()
+        if not sentence:
+            continue
+        
+        step = {
+            "step": i,
+            "action": "process",
+            "description": sentence
+        }
+        
+        # Try to extract temperature from text
+        if "°C" in sentence or "celsius" in sentence.lower():
+            temp_match = re.search(r'(\d+)\s*°?C', sentence)
+            if temp_match:
+                step["temperature_c"] = float(temp_match.group(1))
+        
+        # Try to extract time from text
+        if "hour" in sentence.lower() or "hr" in sentence.lower():
+            time_match = re.search(r'(\d+\.?\d*)\s*(hour|hr|h)', sentence.lower())
+            if time_match:
+                step["duration_h"] = float(time_match.group(1))
+        
+        steps.append(step)
+    
+    # If no steps extracted, create one
+    if not steps:
+        steps = [{
+            "step": 1,
+            "action": "synthesis",
+            "description": operations,
+            "temperature_c": temperature,
+            "duration_h": time_hours
+        }]
+    
+    return steps
+
+
+def _infer_synthesis_method(recipe: Dict[str, Any]) -> str:
+    """Infer synthesis method from recipe metadata."""
+    
+    # Check atmosphere and conditions
+    atmosphere = str(recipe.get("atmosphere", "")).lower()
+    conditions = str(recipe.get("conditions", "")).lower()
+    operations = str(recipe.get("operations", "")).lower()
+    
+    # Look for method indicators
+    all_text = f"{atmosphere} {conditions} {operations}"
+    
+    if "hydrothermal" in all_text or "autoclave" in all_text:
+        return "hydrothermal"
+    elif "solution" in all_text or "precipitation" in all_text:
+        return "solution"
+    elif "sol-gel" in all_text or "sol_gel" in all_text:
+        return "sol_gel"
+    elif "combustion" in all_text:
+        return "combustion"
+    elif "melt" in all_text:
+        return "melting"
+    else:
+        return "solid_state"  # Default
+
+
+def _calculate_feasibility_score(
+    temperature: float,
+    time_hours: float,
+    max_temp: float,
+    max_time: float
+) -> float:
+    """Calculate feasibility score for a literature route."""
+    
+    score = 1.0
+    
+    # Penalize if approaching limits
+    if temperature > max_temp * 0.9:
+        score -= 0.15
+    if time_hours > max_time * 0.9:
+        score -= 0.15
+    
+    # Literature routes get bonus for being proven
+    score += 0.10  # Proven in literature
+    
+    # Clamp to [0, 1]
+    return max(0.0, min(1.0, score))

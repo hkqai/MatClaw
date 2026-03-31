@@ -28,10 +28,7 @@ _requires_api_key = pytest.mark.skipif(
 )
 
 
-# ---------------------------------------------------------------------------
 # Missing API key (always runs)
-# ---------------------------------------------------------------------------
-
 class TestMissingApiKey:
 
     def test_missing_api_key_returns_error(self, monkeypatch):
@@ -43,10 +40,7 @@ class TestMissingApiKey:
         assert "MP_API_KEY" in result["error"]
 
 
-# ---------------------------------------------------------------------------
 # Invalid / unknown data type
-# ---------------------------------------------------------------------------
-
 @_requires_api_key
 class TestInvalidDataType:
 
@@ -69,10 +63,7 @@ class TestInvalidDataType:
         assert "element" in result["error"].lower()
 
 
-# ---------------------------------------------------------------------------
 # Band structure  (mp-149 – Si)
-# ---------------------------------------------------------------------------
-
 @_requires_api_key
 class TestBandStructure:
 
@@ -116,10 +107,7 @@ class TestBandStructure:
         assert result["plot_config"]["plot_type"] == "line"
 
 
-# ---------------------------------------------------------------------------
 # Density of states  (mp-149 – Si)
-# ---------------------------------------------------------------------------
-
 @_requires_api_key
 class TestDos:
 
@@ -158,10 +146,7 @@ class TestDos:
         assert result["plot_config"]["plot_type"] == "area"
 
 
-# ---------------------------------------------------------------------------
 # Elastic tensor  (mp-149 – Si)
-# ---------------------------------------------------------------------------
-
 @_requires_api_key
 class TestElasticTensor:
 
@@ -196,10 +181,7 @@ class TestElasticTensor:
         assert result["plot_config"]["plot_type"] == "heatmap"
 
 
-# ---------------------------------------------------------------------------
 # EOS data  (mp-149 – Si)
-# ---------------------------------------------------------------------------
-
 @_requires_api_key
 class TestEosData:
 
@@ -237,10 +219,7 @@ class TestEosData:
         assert result["plot_config"]["plot_type"] == "scatter"
 
 
-# ---------------------------------------------------------------------------
 # XAS spectrum  (mp-149 – Si K-edge XANES)
-# ---------------------------------------------------------------------------
-
 @_requires_api_key
 class TestXasSpectrum:
 
@@ -298,10 +277,7 @@ class TestXasSpectrum:
         assert "error" in result
 
 
-# ---------------------------------------------------------------------------
 # Dielectric tensor  (mp-5020 – BaTiO3, known to have dielectric data)
-# ---------------------------------------------------------------------------
-
 @_requires_api_key
 class TestDielectricTensor:
 
@@ -332,10 +308,7 @@ class TestDielectricTensor:
                 assert len(row) == 3
 
 
-# ---------------------------------------------------------------------------
 # Phonon band structure & DOS  (data may not be available for all materials)
-# ---------------------------------------------------------------------------
-
 @_requires_api_key
 class TestPhononData:
 

@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<robot name="bad-names-robot">
+  <link name="base-link">
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001"/>
+    </inertial>
+  </link>
+  <link name="link.with.dots">
+    <inertial>
+      <mass value="0.5"/>
+      <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001"/>
+    </inertial>
+  </link>
+  <link name="3rd_link">
+    <inertial>
+      <mass value="0.5"/>
+      <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001"/>
+    </inertial>
+  </link>
+  <link name="link with spaces">
+    <inertial>
+      <mass value="0.5"/>
+      <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001"/>
+    </inertial>
+  </link>
+  <link name="under_score_ok">
+    <inertial>
+      <mass value="0.5"/>
+      <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001"/>
+    </inertial>
+  </link>
+
+  <joint name="base-link_to_dots" type="fixed">
+    <parent link="base-link"/>
+    <child link="link.with.dots"/>
+  </joint>
+  <joint name="dots-to-3rd" type="fixed">
+    <parent link="link.with.dots"/>
+    <child link="3rd_link"/>
+  </joint>
+  <joint name="3rd_to_spaces" type="fixed">
+    <parent link="3rd_link"/>
+    <child link="link with spaces"/>
+  </joint>
+  <joint name="spaces_to_ok" type="fixed">
+    <parent link="link with spaces"/>
+    <child link="under_score_ok"/>
+  </joint>
+</robot>

@@ -49,9 +49,13 @@ def pymatgen_substitution_generator(
             default=5,
             ge=1,
             le=100,
-            description="Number of structure variants to generate (1-100). "
-            "For fractional substitutions, creates different random arrangements. "
-            "For multiple substitution options, cycles through combinations. "
+            description="Number of structure variants to generate PER SUBSTITUTION COMBINATION (1-100). "
+            "Total output count = n_structures × number_of_combinations, subject to max_attempts cap. "
+            "For fractional substitutions: creates n_structures different random site arrangements per combo. "
+            "For deterministic (fraction=1.0) substitutions: all n_structures copies are IDENTICAL — "
+            "set n_structures=1 to avoid duplicate output. "
+            "For multiple substitution options {'Ti': ['Mn','Fe','Co']}: one combination per option, "
+            "so total = n_structures × len(options). "
             "Default: 5."
         )
     ] = 5,
@@ -70,8 +74,13 @@ def pymatgen_substitution_generator(
             default=50,
             ge=1,
             le=500,
-            description="Maximum attempts to generate valid structures (1-500). "
-            "Useful when random fractional doping or charge balancing requires multiple tries. "
+            description="Hard cap on total generation attempts (1-500). "
+            "Acts as an absolute limit on output count: once attempts exceeds this value, "
+            "generation stops regardless of how many structures were requested. "
+            "For deterministic substitutions (fraction=1.0) every attempt succeeds, so "
+            "output count = min(n_structures × num_combinations, max_attempts). "
+            "IMPORTANT: when using a list of N substitution options with n_structures=k, "
+            "set max_attempts >= N × k to avoid silently truncating the output. "
             "Default: 50."
         )
     ] = 50,

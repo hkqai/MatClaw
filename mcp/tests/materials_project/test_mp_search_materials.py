@@ -25,10 +25,7 @@ _requires_api_key = pytest.mark.skipif(
 )
 
 
-# ---------------------------------------------------------------------------
 # Basic formula search
-# ---------------------------------------------------------------------------
-
 @_requires_api_key
 class TestFormulaSearch:
 
@@ -71,10 +68,7 @@ class TestFormulaSearch:
         assert result["success"] is True
 
 
-# ---------------------------------------------------------------------------
 # Response structure
-# ---------------------------------------------------------------------------
-
 @_requires_api_key
 class TestResponseStructure:
 
@@ -125,10 +119,7 @@ class TestResponseStructure:
         assert result["count"] == len(result["materials"])
 
 
-# ---------------------------------------------------------------------------
 # max_results limit
-# ---------------------------------------------------------------------------
-
 @_requires_api_key
 class TestMaxResults:
 
@@ -144,10 +135,7 @@ class TestMaxResults:
         assert len(result["materials"]) == 1
 
 
-# ---------------------------------------------------------------------------
 # Filters
-# ---------------------------------------------------------------------------
-
 @_requires_api_key
 class TestFilters:
 
@@ -198,10 +186,7 @@ class TestFilters:
                 assert 1.0 <= float(bg) <= 2.0
 
 
-# ---------------------------------------------------------------------------
 # No results (requires API key)
-# ---------------------------------------------------------------------------
-
 @_requires_api_key
 class TestNoResults:
 
@@ -220,10 +205,7 @@ class TestNoResults:
         assert len(result["error"]) > 0
 
 
-# ---------------------------------------------------------------------------
 # Missing API key (always runs)
-# ---------------------------------------------------------------------------
-
 class TestMissingApiKey:
 
     def test_missing_api_key_returns_error(self, monkeypatch):

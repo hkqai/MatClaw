@@ -12,10 +12,7 @@ import pytest
 from tools.pubchem.pubchem_search_compounds import pubchem_search_compounds
 
 
-# ---------------------------------------------------------------------------
 # Basic search behaviour
-# ---------------------------------------------------------------------------
-
 class TestBasicSearch:
 
     def test_name_search_aspirin_success(self):
@@ -78,10 +75,7 @@ class TestBasicSearch:
         assert result["compounds"][0]["molecular_formula"] == "C8H10N4O2"
 
 
-# ---------------------------------------------------------------------------
 # Query dictionary
-# ---------------------------------------------------------------------------
-
 class TestQueryDict:
 
     def test_query_dict_present(self):
@@ -117,10 +111,7 @@ class TestQueryDict:
         assert len(result["query"]["identifiers"]) == 1
 
 
-# ---------------------------------------------------------------------------
 # Empty / no-results case
-# ---------------------------------------------------------------------------
-
 class TestEmptyResults:
 
     def test_nonexistent_compound_success_false(self):
@@ -146,10 +137,7 @@ class TestEmptyResults:
         assert len(result["error"]) > 0
 
 
-# ---------------------------------------------------------------------------
 # Namespace variants
-# ---------------------------------------------------------------------------
-
 class TestNamespaceVariants:
 
     def test_smiles_namespace_ethanol(self):
@@ -182,10 +170,7 @@ class TestNamespaceVariants:
         assert result["compounds"][0]["cid"] == 2244
 
 
-# ---------------------------------------------------------------------------
 # Multiple identifiers
-# ---------------------------------------------------------------------------
-
 class TestMultipleIdentifiers:
 
     def test_list_of_identifiers_aggregated(self):
@@ -209,10 +194,7 @@ class TestMultipleIdentifiers:
         assert len(cids) == len(set(cids))
 
 
-# ---------------------------------------------------------------------------
 # max_results limiting
-# ---------------------------------------------------------------------------
-
 class TestMaxResults:
 
     def test_max_results_respected(self):
@@ -228,10 +210,7 @@ class TestMaxResults:
         assert result["count"] == 1
 
 
-# ---------------------------------------------------------------------------
 # Response structure
-# ---------------------------------------------------------------------------
-
 class TestResponseStructure:
 
     def test_all_top_level_fields_on_success(self):

@@ -6,7 +6,7 @@ import pubchempy as pcp
 def pubchem_get_compound_properties(
     cids: Annotated[
         int | List[int], 
-        Field(description="PubChem Compound ID(s). Can be a single CID or list of CIDs.")
+        Field(description="PubChem Compound ID(s). Pass a single integer (cids=702) or a list of integers (cids=[702, 2244]). Note: parameter name is 'cids' (plural) for both cases.")
     ],
     properties: Annotated[
         Optional[List[str]], 
@@ -30,10 +30,12 @@ def pubchem_get_compound_properties(
     pubchem_search_compounds to get in-depth property information.
     
     Examples:
-        - Default properties: cids=2244 (returns comprehensive property set)
-        - Specific properties: cids=2244, properties=["MolecularWeight", "XLogP", "TPSA"]
-        - Multiple compounds: cids=[2244, 2519], properties=["MolecularWeight", "XLogP"]
+        - Single CID with defaults: cids=2244 (returns comprehensive property set)
+        - Single CID with specific properties: cids=2244, properties=["MolecularWeight", "XLogP", "TPSA"]
+        - Multiple CIDs: cids=[2244, 2519], properties=["MolecularWeight", "XLogP"]
         - Drug-like properties: cids=2244, properties=["MolecularWeight", "XLogP", "HBondDonorCount", "HBondAcceptorCount"]
+    
+    IMPORTANT: The parameter is named 'cids' (plural) regardless of whether you pass one or multiple CIDs.
     
     Common Property Categories:
         - Basic: MolecularFormula, MolecularWeight, CanonicalSMILES, InChI, InChIKey, IUPACName
@@ -43,7 +45,8 @@ def pubchem_get_compound_properties(
         - 3D: Volume3D, XStericQuadrupole, YStericQuadrupole, ZStericQuadrupole
     
     Args:
-        cids: Single CID (int) or list of CIDs to retrieve properties for
+        cids: Single integer (e.g., cids=702) or list of integers (e.g., cids=[702, 2244]).
+              Note: parameter name is 'cids' (plural) even for a single CID.
         properties: List of property names to retrieve. If None, returns default property set.
     
     Returns:

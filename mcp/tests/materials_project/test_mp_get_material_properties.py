@@ -25,10 +25,7 @@ _requires_api_key = pytest.mark.skipif(
 )
 
 
-# ---------------------------------------------------------------------------
 # Missing API key (always runs)
-# ---------------------------------------------------------------------------
-
 class TestMissingApiKey:
 
     def test_missing_api_key_returns_error(self, monkeypatch):
@@ -40,10 +37,7 @@ class TestMissingApiKey:
         assert "MP_API_KEY" in result["error"]
 
 
-# ---------------------------------------------------------------------------
 # Top-level response structure
-# ---------------------------------------------------------------------------
-
 @_requires_api_key
 class TestResponseStructure:
 
@@ -91,10 +85,7 @@ class TestResponseStructure:
         assert result["count"] == len(result["properties"])
 
 
-# ---------------------------------------------------------------------------
 # Default property categories
-# ---------------------------------------------------------------------------
-
 @_requires_api_key
 class TestDefaultProperties:
 
@@ -122,10 +113,7 @@ class TestDefaultProperties:
         assert "thermodynamic" in entry
 
 
-# ---------------------------------------------------------------------------
 # Basic properties category
-# ---------------------------------------------------------------------------
-
 @_requires_api_key
 class TestBasicProperties:
 
@@ -163,10 +151,7 @@ class TestBasicProperties:
         assert result["properties"][0]["basic"]["nelements"] == 1
 
 
-# ---------------------------------------------------------------------------
 # Structure properties category
-# ---------------------------------------------------------------------------
-
 @_requires_api_key
 class TestStructureProperties:
 
@@ -207,10 +192,7 @@ class TestStructureProperties:
         assert len(sites) > 0
 
 
-# ---------------------------------------------------------------------------
 # Electronic properties category
-# ---------------------------------------------------------------------------
-
 @_requires_api_key
 class TestElectronicProperties:
 
@@ -240,10 +222,7 @@ class TestElectronicProperties:
             assert key in electronic, f"Missing key in electronic: {key}"
 
 
-# ---------------------------------------------------------------------------
 # Thermodynamic properties category
-# ---------------------------------------------------------------------------
-
 @_requires_api_key
 class TestThermodynamicProperties:
 
@@ -274,10 +253,7 @@ class TestThermodynamicProperties:
             assert key in thermo, f"Missing key in thermodynamic: {key}"
 
 
-# ---------------------------------------------------------------------------
 # Mechanical properties category
-# ---------------------------------------------------------------------------
-
 @_requires_api_key
 class TestMechanicalProperties:
 
@@ -304,10 +280,7 @@ class TestMechanicalProperties:
                 assert key in mech, f"Missing key in mechanical: {key}"
 
 
-# ---------------------------------------------------------------------------
 # 'all' properties keyword
-# ---------------------------------------------------------------------------
-
 @_requires_api_key
 class TestAllProperties:
 
@@ -328,10 +301,7 @@ class TestAllProperties:
             assert cat in cats, f"Expected category '{cat}' missing from 'all' expansion"
 
 
-# ---------------------------------------------------------------------------
 # Multiple material IDs
-# ---------------------------------------------------------------------------
-
 @_requires_api_key
 class TestMultipleMaterials:
 

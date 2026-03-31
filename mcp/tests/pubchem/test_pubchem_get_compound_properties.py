@@ -15,10 +15,7 @@ import pytest
 from tools.pubchem.pubchem_get_compound_properties import pubchem_get_compound_properties
 
 
-# ---------------------------------------------------------------------------
 # Basic single-CID retrieval
-# ---------------------------------------------------------------------------
-
 class TestBasicRetrieval:
 
     def test_single_cid_int_success(self):
@@ -77,10 +74,7 @@ class TestBasicRetrieval:
         assert result["properties"][0]["MolecularFormula"] == "C8H10N4O2"
 
 
-# ---------------------------------------------------------------------------
 # Response structure
-# ---------------------------------------------------------------------------
-
 class TestResponseStructure:
 
     def test_success_key_present(self):
@@ -118,10 +112,7 @@ class TestResponseStructure:
         assert len(result["requested_properties"]) > 0
 
 
-# ---------------------------------------------------------------------------
 # Default property set
-# ---------------------------------------------------------------------------
-
 class TestDefaultProperties:
 
     def test_default_includes_molecular_formula(self):
@@ -146,10 +137,7 @@ class TestDefaultProperties:
         assert result["properties"][0]["InChIKey"] == "BSYNRYMUTXBXSQ-UHFFFAOYSA-N"
 
 
-# ---------------------------------------------------------------------------
 # Multiple CIDs
-# ---------------------------------------------------------------------------
-
 class TestMultipleCIDs:
 
     def test_list_of_cids_success(self):
@@ -187,10 +175,7 @@ class TestMultipleCIDs:
         assert set(result["requested_cids"]) == {2244, 702}
 
 
-# ---------------------------------------------------------------------------
 # Invalid / nonexistent CID handling
-# ---------------------------------------------------------------------------
-
 class TestInvalidCIDs:
 
     def test_invalid_cid_returns_success_false(self):
