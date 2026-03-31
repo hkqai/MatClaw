@@ -57,6 +57,7 @@ MatClaw follows a layered architecture:
 | **vasp-ase** | Professional workflow for setting up, executing, and debugging VASP DFT calculations using ASE |
 | **urdf-validator** | Pre-import validation and auto-fix workflow for URDF files targeting Isaac Sim |
 | **lula-description-generator** | Workflow for generating Lula robot descriptions with automatic collision sphere placement for NVIDIA Isaac Sim |
+| **isaac-lab-scene-init** | Author or extend an Isaac Lab scene (robots and assets) and generate a ready-to-run Python script |
 | **nsys-optimizer** | Performance profiling and optimization for computational workflows using NVIDIA Nsight Systems |
 
 ## Setup
