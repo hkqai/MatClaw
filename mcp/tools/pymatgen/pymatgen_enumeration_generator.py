@@ -1,15 +1,19 @@
 """
-Tool for enumerating symmetry-inequivalent ordered supercell decorations of disordered structures.
+Tool for generating ordered structures from disordered structures with partial site occupancies.
 
-Takes input structures with fractional site occupancies and generates all symmetry-inequivalent
-ordered supercell approximants up to a given supercell-size limit, ranked by Ewald electrostatic
-energy or supercell size.
+Takes input structures with fractional site occupancies and generates ordered structures
+by systematically assigning species to partially occupied sites. Structures can be ranked
+by Ewald electrostatic energy or supercell size.
+
+NOTE: This tool uses pymatgen's OrderDisorderedStructureTransformation, which does NOT
+perform systematic supercell enumeration. It creates a supercell based on supercell_size
+and then generates ordered structures from the disordered supercell.
 
 Core use cases in inorganic materials discovery:
   - Building DFT candidate pools for intermediate compositions (e.g., Li_x Na_{1-x} Cl)
   - Identifying likely ground-state cation orderings in layered oxides, spinels, perovskites
-  - Generating training data for cluster expansion (CE) models
-  - Exploring vacancy and interstitial configurations systematically
+  - Generating ordered structures from disordered inputs
+  - Exploring different site orderings systematically
 """
 
 from typing import Dict, Any, Optional, List, Union, Annotated
@@ -29,34 +33,21 @@ def pymatgen_enumeration_generator(
             )
         )
     ],
-    min_cell_size: Annotated[
+    supercell_size: Annotated[
         int,
         Field(
-            default=1,
+            default=2,
             ge=1,
-            le=8,
+            le=4,
             description=(
-                "Minimum supercell size multiplier (1–8). "
-                "The enumeration considers supercells from min_cell_size to max_cell_size "
-                "formula units. Default: 1."
+                "Supercell size multiplier (1–4). "
+                "Creates a supercell of size [supercell_size, supercell_size, 1] "
+                "to accommodate fractional occupancies before ordering. "
+                "Larger values allow more ordering possibilities but increase computation time. "
+                "Default: 2."
             )
         )
-    ] = 1,
-    max_cell_size: Annotated[
-        int,
-        Field(
-            default=4,
-            ge=1,
-            le=8,
-            description=(
-                "Maximum supercell size multiplier (1–8). "
-                "Controls the combinatorial scale of the enumeration — the number of "
-                "configurations grows factorially with cell size. "
-                "Recommended: ≤ 4 for binary mixtures, ≤ 2 for ternary. "
-                "Larger values can be very slow. Default: 4."
-            )
-        )
-    ] = 4,
+    ] = 2,
     n_structures: Annotated[
         int,
         Field(
@@ -152,20 +143,17 @@ def pymatgen_enumeration_generator(
     ] = "dict"
 ) -> Dict[str, Any]:
     """
-    Enumerate symmetry-inequivalent ordered supercell decorations of disordered structures.
+    Generate ordered structures from disordered structures with partial site occupancies.
 
-    Uses pymatgen's EnumerateStructureTransformation, which wraps the Hart-Forcade enumlib
-    algorithm (enum.x), to find all symmetry-distinct ways of assigning species to sites in
-    supercells of the parent disordered cell up to max_cell_size formula units.
+    Uses pymatgen's OrderDisorderedStructureTransformation to create ordered structures
+    by assigning species to partially occupied sites. This does NOT perform systematic
+    supercell enumeration - it only orders the input structure at its current size.
 
     The returned structures are fully ordered (no partial occupancies) and ready for direct
-    use in DFT calculations, cluster expansion fitting, or further processing by
-    pymatgen_perturbation_generator.
+    use in DFT calculations or further processing by pymatgen_perturbation_generator.
 
     Requirements:
         - pymatgen must be installed: pip install pymatgen
-        - enumlib (enum.x) must be on PATH for EnumerateStructureTransformation to work.
-          Install via: pip install enumlib  OR  conda install -c conda-forge enumlib
 
     Returns:
         dict:
@@ -212,11 +200,7 @@ def pymatgen_enumeration_generator(
             "error": f"Invalid sort_by '{sort_by}'. Must be one of {sorted(valid_sort)}."
         }
 
-    if min_cell_size > max_cell_size:
-        return {
-            "success": False,
-            "error": f"min_cell_size ({min_cell_size}) must be <= max_cell_size ({max_cell_size})."
-        }
+
 
     # Parse input structures
     if isinstance(input_structures, (dict, str)):
@@ -250,35 +234,16 @@ def pymatgen_enumeration_generator(
     if not structures:
         return {"success": False, "error": "No valid input structures provided."}
 
-    # Detect enumlib availability
-    import shutil
-    _enumlib_available = shutil.which("enum.x") is not None
-
-    if not _enumlib_available:
-        return {
-            "success": False,
-            "error": (
-                "enum.x (enumlib) is not on PATH and is required for structure enumeration. "
-                "enumlib is NOT available on PyPI or conda for Windows natively. "
-                "Install via WSL (Windows Subsystem for Linux): "
-                "  1. Install WSL: wsl --install  "
-                "  2. Inside WSL: conda install -c conda-forge enumlib  "
-                "  3. Add the WSL enum.x path to your Windows PATH. "
-                "On Linux/macOS: conda install -c conda-forge enumlib"
-            ),
-            "enumlib_available": False,
-        }
-
-    # Import enumeration class
+    # Import OrderDisorderedStructureTransformation
     try:
-        from pymatgen.transformations.advanced_transformations import (
-            EnumerateStructureTransformation,
+        from pymatgen.transformations.standard_transformations import (
+            OrderDisorderedStructureTransformation,
         )
     except ImportError as e:
         return {
             "success": False,
             "error": (
-                f"Failed to import EnumerateStructureTransformation: {e}. "
+                f"Failed to import OrderDisorderedStructureTransformation: {e}. "
                 "Ensure pymatgen is installed: pip install pymatgen"
             )
         }
@@ -301,14 +266,31 @@ def pymatgen_enumeration_generator(
             )
             continue
 
-        # Optionally add oxidation states for Ewald ranking
+        # Create supercell to accommodate fractional occupancies
         struct_for_enum = struct.copy()
         effective_sort = sort_by
-        if sort_by == "ewald" and add_oxidation_states:
+        
+        # Create a supercell to make fractional occupancies work
+        try:
+            from pymatgen.transformations.standard_transformations import SupercellTransformation
+            # Create a supercell based on supercell_size
+            scaling_matrix = [[supercell_size, 0, 0], [0, supercell_size, 0], [0, 0, 1]]
+            super_trans = SupercellTransformation(scaling_matrix)
+            struct_for_enum = super_trans.apply_transformation(struct_for_enum)
+        except Exception as e:
+            warnings.append(f"Failed to create supercell for '{src_formula}': {e}")
+            continue
+        
+        # Add oxidation states if needed for Ewald ranking  
+        needs_oxidation = sort_by == "ewald" and add_oxidation_states
+        has_oxidation = False
+        
+        if needs_oxidation:
             try:
                 from pymatgen.analysis.bond_valence import BVAnalyzer
                 bva = BVAnalyzer()
                 struct_for_enum = bva.get_oxi_state_decorated_structure(struct_for_enum)
+                has_oxidation = True
             except Exception as e:
                 warnings.append(
                     f"Structure '{src_formula}': could not auto-assign oxidation states "
@@ -316,54 +298,65 @@ def pymatgen_enumeration_generator(
                 )
                 effective_sort = "num_sites"
 
-        sort_criteria = effective_sort if effective_sort in ("ewald", "num_sites") else "num_sites"
-
-        trans = EnumerateStructureTransformation(
-            min_cell_size=min_cell_size,
-            max_cell_size=max_cell_size,
-            symm_prec=symm_prec,
-            refine_structure=refine_structure,
-            check_ordered_symmetry=False,
-            sort_criteria=sort_criteria,
+        # Use OrderDisorderedStructureTransformation
+        # Use no_oxi_states=True if we don't have oxidation states decorated
+        trans = OrderDisorderedStructureTransformation(
+            algo=0,
+            symmetrized_structures=refine_structure,
+            no_oxi_states=not has_oxidation,
+            symprec=symm_prec if symm_prec else 0.1,
         )
 
         try:
             raw = trans.apply_transformation(struct_for_enum, return_ranked_list=n_structures)
-        except RuntimeError as e:
-            err_str = str(e)
-            if "enum" in err_str.lower() or "executable" in err_str.lower():
-                return {
-                    "success": False,
-                    "error": (
-                        "enum.x (enumlib) call failed — it may have been removed from PATH. "
-                        f"Original error: {err_str}"
-                    )
-                }
-            warnings.append(f"Enumeration failed for '{src_formula}': {err_str}")
-            continue
         except Exception as e:
-            warnings.append(f"Enumeration failed for '{src_formula}': {e}")
+            warnings.append(f"Ordering failed for '{src_formula}': {e}")
             continue
 
+        # Handle return value - can be Structure or list
         if isinstance(raw, Structure):
-            raw = [{"structure": raw, "energy": None}]
+            raw = [raw]
         elif not isinstance(raw, list):
-            warnings.append(f"Unexpected return type from enumeration for '{src_formula}'.")
+            warnings.append(f"Unexpected return type from ordering for '{src_formula}'.")
             continue
 
-        if sort_by == "random":
+        # Calculate Ewald energies if needed for sorting
+        structures_with_energy = []
+        for s in raw:
+            if isinstance(s, dict):
+                struct_obj = s.get("structure", s)
+            else:
+                struct_obj = s
+            
+            ewald_e = None
+            if effective_sort == "ewald":
+                try:
+                    from pymatgen.analysis.ewald import EwaldSummation
+                    ewald = EwaldSummation(struct_obj)
+                    ewald_e = ewald.total_energy
+                except Exception:
+                    pass
+            
+            structures_with_energy.append({"structure": struct_obj, "energy": ewald_e})
+
+        # Sort structures
+        if effective_sort == "ewald":
+            structures_with_energy.sort(key=lambda x: x["energy"] if x["energy"] is not None else float('inf'))
+        elif effective_sort == "num_sites":
+            structures_with_energy.sort(key=lambda x: len(x["structure"]))
+        elif sort_by == "random":
             import random as _rng
-            _rng.shuffle(raw)
+            _rng.shuffle(structures_with_energy)
 
         n_atoms_parent = len(struct)
-        for entry in raw[:n_structures]:
-            s = entry["structure"] if isinstance(entry, dict) else entry
-            e = entry.get("energy") if isinstance(entry, dict) else None
+        for entry in structures_with_energy[:n_structures]:
+            s = entry["structure"]
+            e = entry.get("energy")
             _append_result(
                 s, e, src_formula, n_atoms_parent,
                 symm_prec, output_format,
                 generated_structures, metadata_list, warnings,
-                backend="enumlib"
+                backend="OrderDisorderedStructureTransformation"
             )
 
     if not generated_structures:
@@ -386,10 +379,8 @@ def pymatgen_enumeration_generator(
     }
 
     enumeration_params = {
-        "backend": "enumlib",
-        "enumlib_available": True,
-        "min_cell_size": min_cell_size,
-        "max_cell_size": max_cell_size,
+        "backend": "OrderDisorderedStructureTransformation",
+        "supercell_size": supercell_size,
         "n_structures_requested": n_structures,
         "sort_by": sort_by,
         "symm_prec": symm_prec,
@@ -407,9 +398,9 @@ def pymatgen_enumeration_generator(
         "input_info": input_info,
         "enumeration_params": enumeration_params,
         "message": (
-            f"Enumerated {len(generated_structures)} ordered structure(s) from "
+            f"Generated {len(generated_structures)} ordered structure(s) from "
             f"{len(structures)} input structure(s) "
-            f"(max_cell_size={max_cell_size}, sort_by='{sort_by}')."
+            f"(sort_by='{sort_by}'). Note: No supercell enumeration performed."
         ),
     }
     if warnings:
