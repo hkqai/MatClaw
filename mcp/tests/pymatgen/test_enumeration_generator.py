@@ -410,9 +410,9 @@ class TestMetadata:
             assert m["n_sites"] > 0
 
 
-# Error handling — these tests always run (no enumlib required)
+# Error handling
 class TestErrorHandling:
-    """Parameter-validation and error-path tests that run without enumlib."""
+    """Parameter-validation and error-path tests."""
 
     def test_invalid_output_format(self, disordered_li_na_cl):
         result = pymatgen_enumeration_generator(

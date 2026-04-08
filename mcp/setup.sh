@@ -3,11 +3,9 @@
 # MatClaw MCP — environment setup
 #
 # Usage:
-#   bash setup.sh            # full setup (venv + pip + enumlib check)
-#   bash setup.sh --no-enum  # skip enumlib installation
+#   bash setup.sh
 #
 # Supports: Linux, macOS, Windows (Git Bash/WSL).
-# Note: enumlib installation requires conda or WSL on Windows.
 # ---------------------------------------------------------------------------
 set -euo pipefail
 
@@ -17,11 +15,6 @@ if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]]; t
 else
   IS_WINDOWS=false
 fi
-
-SKIP_ENUM=false
-for arg in "$@"; do
-  [[ "$arg" == "--no-enum" ]] && SKIP_ENUM=true
-done
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
@@ -80,6 +73,48 @@ python -m pip install -r requirements.txt
 echo "    Done."
 
 # ---------------------------------------------------------------------------
+# 2.5. PyTorch Scatter (CUDA-aware installation)
+# ---------------------------------------------------------------------------
+echo ""
+echo "==> Detecting CUDA and installing torch-scatter..."
+
+# Detect CUDA availability and version via PyTorch
+CUDA_INFO=$(python -c "
+import torch
+import sys
+if torch.cuda.is_available():
+    cuda_version = torch.version.cuda
+    # Convert CUDA version to PyG wheel format (e.g., '11.8' -> 'cu118', '12.1' -> 'cu121')
+    if cuda_version:
+        major, minor = cuda_version.split('.')
+        print(f'cu{major}{minor}')
+    else:
+        print('cpu')
+else:
+    print('cpu')
+" 2>/dev/null || echo "cpu")
+
+echo "    Detected: $CUDA_INFO"
+
+# Determine PyTorch version for wheel compatibility
+TORCH_VERSION=$(python -c "import torch; print(torch.__version__.split('+')[0])" 2>/dev/null || echo "2.2.1")
+
+# Install torch-scatter with appropriate wheel
+WHEEL_URL="https://data.pyg.org/whl/torch-${TORCH_VERSION}+${CUDA_INFO}.html"
+echo "    Installing torch-scatter from: $WHEEL_URL"
+
+python -m pip install torch-scatter -f "$WHEEL_URL" --no-cache-dir
+
+if python -c "import torch_scatter" 2>/dev/null; then
+  echo "    torch-scatter installed successfully."
+else
+  echo ""
+  echo "    WARNING: torch-scatter installation may have failed."
+  echo "    This is required for elemwise_retro tools."
+  echo "    Try manually: pip install torch-scatter -f $WHEEL_URL"
+fi
+
+# ---------------------------------------------------------------------------
 # 3. .env file
 # ---------------------------------------------------------------------------
 echo ""
@@ -89,48 +124,6 @@ if [[ ! -f ".env" ]]; then
   echo "    *** Set your MP_API_KEY in mcp/.env before running the server. ***"
 else
   echo "==> .env already exists — skipping."
-fi
-
-# ---------------------------------------------------------------------------
-# 4. enumlib (enum.x)  — Linux/macOS via conda, Windows via WSL
-# ---------------------------------------------------------------------------
-if [[ "$SKIP_ENUM" == true ]]; then
-  echo ""
-  echo "==> Skipping enumlib installation (--no-enum)."
-else
-  echo ""
-  echo "==> Checking for enumlib (enum.x)..."
-
-  if command -v enum.x &>/dev/null; then
-    echo "    enum.x found at: $(command -v enum.x)"
-    echo "    EnumerateStructureTransformation (pymatgen_enumeration_generator) is available."
-  else
-    echo "    enum.x not found on PATH."
-
-    if command -v conda &>/dev/null; then
-      echo "    conda found — installing enumlib from conda-forge..."
-      # Install into the base/active conda env so enum.x lands on PATH
-      conda install -c conda-forge enumlib -y
-      if command -v enum.x &>/dev/null; then
-        echo "    enum.x installed successfully at: $(command -v enum.x)"
-      else
-        echo ""
-        echo "    WARNING: conda install completed but enum.x is still not on PATH."
-        echo "    You may need to restart your shell or activate the correct conda env,"
-        echo "    then re-run: conda install -c conda-forge enumlib"
-      fi
-    else
-      echo ""
-      echo "    WARNING: conda not found — cannot install enumlib automatically."
-      echo ""
-      echo "    To install enumlib manually:"
-      echo "      Linux/macOS:  conda install -c conda-forge enumlib"
-      echo "      Windows:      Run this script inside WSL (wsl --install Ubuntu)"
-      echo ""
-      echo "    The MCP server will still start and all tools except"
-      echo "    pymatgen_enumeration_generator will work normally."
-    fi
-  fi
 fi
 
 # ---------------------------------------------------------------------------

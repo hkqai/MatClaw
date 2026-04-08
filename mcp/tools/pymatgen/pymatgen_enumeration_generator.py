@@ -71,7 +71,7 @@ def pymatgen_enumeration_generator(
                 "  Requires oxidation states; use add_oxidation_states=True if not decorated. "
                 "  Best criterion for ionic materials (oxides, fluorides, etc.). "
                 "'num_sites': rank by supercell size — smallest supercells first. "
-                "'random': return in arbitrary enumlib order (no re-ranking). "
+                "'random': return in arbitrary order (no re-ranking). "
                 "Default: 'ewald'."
             )
         )
