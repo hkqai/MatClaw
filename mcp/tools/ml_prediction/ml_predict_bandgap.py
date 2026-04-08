@@ -158,7 +158,7 @@ def ml_predict_bandgap(
         try:
             state_attr = torch.tensor([0], dtype=torch.long)
             bandgap_tensor = ml_model.predict_structure(structure, state_attr=state_attr)
-            bandgap = float(bandgap_tensor.numpy())
+            bandgap = float(bandgap_tensor.flatten()[0])
         except Exception as e:
             return {
                 "success": False,
