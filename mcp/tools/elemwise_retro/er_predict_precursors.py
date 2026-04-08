@@ -19,7 +19,7 @@ from pymatgen.core import Composition
 from torch_scatter import scatter_mean
 
 # Import model module for pickle unpickling
-import model
+from . import model
 
 # Import model downloader for automatic model downloads
 from utils import model_downloader
@@ -479,7 +479,7 @@ def predict_precursors(
         RuntimeError: If model loading or prediction fails
     """
     # Validate inputs
-    if not target_formula or not isinstance(target_formula, str):
+    if not target_formula or not isinstance(target_formula, str) or not target_formula.strip():
         raise ValueError("target_formula must be a non-empty string")
     
     if not isinstance(top_k, int) or top_k < 1 or top_k > 20:
