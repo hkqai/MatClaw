@@ -156,7 +156,7 @@ def ml_predict_eform(
         # Predict formation energy
         try:
             eform_tensor = ml_model.predict_structure(structure)
-            eform_per_atom = float(eform_tensor.numpy())
+            eform_per_atom = float(eform_tensor.flatten()[0])
         except Exception as e:
             return {
                 "success": False,

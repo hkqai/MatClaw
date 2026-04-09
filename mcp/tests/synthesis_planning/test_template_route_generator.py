@@ -2,6 +2,7 @@
 Tests for template_route_generator tool.
 """
 
+import os
 import pytest
 from tools.synthesis_planning.template_route_generator import (
     template_route_generator,
@@ -16,6 +17,14 @@ pytest.importorskip("pymatgen")
 from pymatgen.core import Composition
 
 
+# Skip tests that require Materials Project API
+_requires_api_key = pytest.mark.skipif(
+    not os.getenv("MP_API_KEY"),
+    reason="MP_API_KEY environment variable not set"
+)
+
+
+@_requires_api_key
 class TestSynthesisRouteGenerator:
     """Test main template_route_generator function."""
     
@@ -363,6 +372,7 @@ class TestPrecursorCalculations:
         assert amount == pytest.approx(0.25, rel=0.01)
 
 
+@_requires_api_key
 class TestRouteStructure:
     """Test the structure and completeness of generated routes."""
     
@@ -450,6 +460,7 @@ class TestRouteStructure:
         assert "hours" in route["total_time_estimate"].lower()
 
 
+@_requires_api_key
 class TestEdgeCases:
     """Test edge cases and error handling."""
     

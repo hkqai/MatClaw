@@ -1,40 +1,36 @@
 --find-links https://data.dgl.ai/wheels/repo.html
-mcp
-python-dotenv
-pytest
-pubchempy
-requests
-mp-api
-pymatgen
-ase
-opencv-python
-torch
-timm
-wget
-Pillow
-docling
-docling-core
-matminer
-dscribe
-numpy<2
-torch==2.2.1
-torchdata==0.7.1
-dgl<2 # windows requires dgl<2, linux/mac can use latest versions
-matgl
+--find-links https://data.pyg.org/whl/torch-2.10.0+cpu.html # Change to your CUDA version
+mcp>=1.0.0
+python-dotenv>=1.0.0
+pytest>=9.0.0
+requests>=2.0.0
+opencv-python>=4.13.0
+timm>=1.0.26
+wget>=3.2
+pillow>=12.2.0
+docling>=2.84.0
+docling-core>=2.71.0
+dscribe>=2.1.2
+numpy>=2.4.4
+#torch==2.2.1
+torch>=2.10.0
+torch-scatter
+torch-geometric>=2.7.0
+torchdata>=0.7.1
+dgl<2.0.0 # windows requires dgl<2, linux/mac can use latest versions
+autoXRD>=0.0.7
 transformers<=4.49
-accelerate
-lxml  # optional: used for pretty-printing fixed URDF XML
-trimesh  # lula tool: mesh loading and voxelisation for collision sphere generation
-scipy    # lula tool: Euclidean distance transform for sphere packing
-pymeshfix  # optional, lula tool: improves mesh repair quality (falls back to trimesh)
-pyyaml     # lula tool: YAML output (also transitively required by pymatgen)
-autoXRD
-git+https://github.com/njszym/ARROWS.git
-
-
-
-# enumlib (enum.x) is required for pymatgen_enumeration_generator but is NOT on PyPI.
-# It is installed automatically by setup.sh (via conda) on Linux/macOS/WSL.
-# Manual install: conda install -c conda-forge enumlib
-# Windows without WSL: not supported — see README.md.
-
+accelerate>=1.13.0
+pubchempy>=1.0.0
+mp-api>=0.46.0
+pymatgen>=2026.3.23
+matgl>=2.1.1
+matminer>=0.9.0
+ase>=3.28.0
+dscribe>=2.1.2
+lxml>=6.0.2  # optional: used for pretty-printing fixed URDF XML
+trimesh>=4.11.5  # lula tool: mesh loading and voxelisation for collision sphere generation
+scipy>=1.17.1    # lula tool: Euclidean distance transform for sphere packing
+pymeshfix>=0.18.0  # optional, lula tool: improves mesh repair quality (falls back to trimesh)
+pyyaml>=6.0.3     # lula tool: YAML output (also transitively required by pymatgen)
+# git+https://github.com/njszym/ARROWS.git@cb630e944315c8ac19f5b9a3c9d8984be93258a6

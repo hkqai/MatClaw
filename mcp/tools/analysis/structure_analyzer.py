@@ -177,6 +177,23 @@ def structure_analyzer(
             "error": f"Failed to import matminer: {e}. Install with: pip install matminer"
         }
     
+    # # Fix pymatgen/matminer compatibility issue for cn_opt_params.yaml
+    # Newer pymatgen moved the file from analysis/ to core/, but matminer still expects old location
+    try:
+        import os
+        import shutil
+        import pymatgen.core  # Use submodule to get __file__
+        pymatgen_path = os.path.dirname(os.path.dirname(pymatgen.core.__file__))
+        source_file = os.path.join(pymatgen_path, "core", "cn_opt_params.yaml")
+        target_file = os.path.join(pymatgen_path, "analysis", "cn_opt_params.yaml")
+        
+        # Only copy if source exists and target doesn't
+        if os.path.exists(source_file) and not os.path.exists(target_file):
+            os.makedirs(os.path.dirname(target_file), exist_ok=True)
+            shutil.copy2(source_file, target_file)
+    except Exception:
+        pass
+    
     # Parse input structure
     try:
         if isinstance(input_structure, dict):

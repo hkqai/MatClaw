@@ -17,26 +17,6 @@ python server.py
 
 ## Dependencies
 
-The server has two kinds of dependencies:
-
-| Dependency | Install via | Required for |
-|---|---|---|
-| Python packages (mcp, pymatgen, ase, …) | `pip` / `requirements.txt` | All tools |
-| `enum.x` (enumlib) | `conda` (Linux/macOS/WSL only) | `pymatgen_enumeration_generator` only |
-
-All pip packages are installed automatically by `setup.sh`. The `setup.sh` script also attempts to install `enumlib` via conda if conda is available.
-
-### Why two package managers?
-
-`enumlib` is a compiled C++ binary (`enum.x`) that implements the Hart-Forcade enumeration algorithm. It is:
-
-- **Not on PyPI** — `pip install enumlib` will fail.
-- **Only on conda-forge for Linux and macOS** — Windows requires WSL.
-
-All other tools work with pip only. `pymatgen_enumeration_generator` is the sole tool that needs `enum.x`.
-
----
-
 ## Installation
 
 ### Linux / macOS (recommended)
@@ -44,18 +24,14 @@ All other tools work with pip only. `pymatgen_enumeration_generator` is the sole
 ```bash
 cd mcp/
 
-# Full setup — creates venv, installs pip packages, installs enumlib via conda
+# Full setup — creates venv, installs pip packages
 bash setup.sh
 
 # Activate the venv
 source venv/bin/activate
 ```
 
-If conda is not installed, the script will skip enumlib and warn you. Install [Miniconda](https://docs.conda.io/en/latest/miniconda.html) first if you need enumeration support.
-
 ### Windows (native)
-
-Native Windows supports all tools **except** `pymatgen_enumeration_generator` because `enum.x` is not available for Windows.
 
 ```powershell
 cd mcp\
@@ -73,7 +49,6 @@ copy .env.example .env
 
 ### Windows + WSL (full support)
 
-WSL provides a Linux environment where `enumlib` can be installed normally.
 
 **One-time WSL setup** (run in PowerShell as Administrator):
 ```powershell
@@ -132,17 +107,7 @@ source venv/bin/activate
 python -m pytest tests/ -v
 ```
 
-Tests for `pymatgen_enumeration_generator` that require `enum.x` are automatically **skipped** when `enum.x` is not on PATH. This is expected on Windows without WSL.
-
-```
-# Expected on Windows without WSL
-6 passed, 28 skipped   ← correct, not a failure
-
-# Expected on Linux/macOS/WSL with enumlib installed
-34 passed, 0 skipped
-```
-
-Run only the enumeration tests:
+Run tests for a particular module:
 ```bash
 python -m pytest tests/pymatgen/test_enumeration_generator.py -v
 ```
@@ -186,7 +151,7 @@ python -m pytest tests/pymatgen/test_enumeration_generator.py -v
 | `pymatgen_substitution_generator` | Generate structures by element substitution |
 | `pymatgen_ion_exchange_generator` | Generate ion-exchanged variants with charge balancing |
 | `pymatgen_perturbation_generator` | Randomly perturb atomic positions and lattice |
-| `pymatgen_enumeration_generator` | Enumerate ordered supercell decorations of disordered structures (**requires enumlib**) |
+| `pymatgen_enumeration_generator` | Enumerate ordered supercell decorations of disordered structures |
 | `predict_molecule_binding` | Predict molecule-target binding label with fixed fine-tuned LLM prompt (1 active / 0 inactive) |
 | `predict_molecule_synthesizability` | Predict molecule synthesizability label with fixed fine-tuned LLM prompt (1 yes / 0 no / 2 unknown) |
 | `pymatgen_defect_generator` | Generate point defect supercells (vacancies, substitutions, interstitials) |

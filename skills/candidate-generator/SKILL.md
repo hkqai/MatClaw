@@ -80,17 +80,17 @@ so that total ionic charge is conserved. Only charge-neutral structures are retu
 
 ### 4. `pymatgen_enumeration_generator` — Exhaustive Ordering of Disordered Structures
 Takes structures with **fractional site occupancies** and returns all symmetry-inequivalent
-ordered supercell approximants up to a cell-size limit, ranked by Ewald energy or cell size.
+ordered supercell approximants, ranked by Ewald energy or cell size.
 
 **Key parameters:**
-- `min_cell_size` / `max_cell_size`: supercell multiplier range (1–8); keep `max_cell_size ≤ 4`
-  for binaries, `≤ 2` for ternaries to avoid combinatorial explosion
+- `supercell_size`: supercell multiplier (1–4, default 2); creates a supercell of size
+  `[supercell_size, supercell_size, 1]` to accommodate fractional occupancies. Keep ≤ 2
+  for ternaries to avoid combinatorial explosion
 - `n_structures`: max ordered structures returned per input (default 20, max 500)
 - `sort_by`: `'ewald'` (default, lowest energy first), `'num_sites'`, `'random'`
 - `add_oxidation_states`: auto-assign oxidation states for Ewald ranking (default `True`)
 - `refine_structure`: re-symmetrize before enumeration (recommended, default `True`)
 
-**Requires:** `enumlib` on PATH — install with `pip install enumlib` or `conda install -c conda-forge enumlib`.
 
 **When to use over `sqs_generator`:** when you need the complete ordered-configuration pool,
 want to identify the ground-state ordering, or are building a cluster expansion training set.
@@ -222,7 +222,7 @@ If Phase 2 produced or if you started from a disordered structure:
 ```
 pymatgen_enumeration_generator(
     input_structures=disordered_structs,
-    max_cell_size=4,
+    supercell_size=2,
     n_structures=50,
     sort_by='ewald'
 )
@@ -243,7 +243,7 @@ Decision rule:
 - **Enumeration** when you need all low-energy orderings or a CE training set.
 - **SQS** when disorder is the target state (e.g. (Li,Na)₀.₅CoO₂ solid solution).
 - For high-entropy systems (≥ 4 mixing species), prefer SQS; enumeration becomes
-  intractable above `max_cell_size=2`.
+  intractable above `supercell_size=2`.
 
 ---
 
@@ -413,7 +413,7 @@ sqs = pymatgen_sqs_generator(
 # Li₀.₅CoO₂ starting from partially delithiated structure with site occupancies
 ordered_candidates = pymatgen_enumeration_generator(
     input_structures=disordered_struct,
-    max_cell_size=4,
+    supercell_size=2,
     n_structures=100,
     sort_by='ewald'
 )
@@ -646,22 +646,21 @@ ELSE IF unsure:
 
 **Algorithm:**
 ```
-# Determine max_cell_size based on system complexity
+# Determine supercell_size based on system complexity
 SET num_mixing_species = count_mixing_species(disordered_structures)
 
 IF num_mixing_species == 1:
-    SET max_cell_size = 8  # Single species ordering (e.g., vacancies)
+    SET supercell_size = 4  # Single species ordering (e.g., vacancies)
 ELSE IF num_mixing_species == 2:
-    SET max_cell_size = 4  # Binary mixing (e.g., Li/vacancy)
+    SET supercell_size = 2  # Binary mixing (e.g., Li/vacancy)
 ELSE IF num_mixing_species >= 3:
-    SET max_cell_size = 2  # Ternary+ mixing (combinatorial explosion)
+    SET supercell_size = 1  # Ternary+ mixing (combinatorial explosion)
 ELSE:
-    SET max_cell_size = 4  # Default
+    SET supercell_size = 2  # Default
 
 CALL pymatgen_enumeration_generator(
     input_structures=disordered_structures,
-    min_cell_size=1,
-    max_cell_size=max_cell_size,
+    supercell_size=supercell_size,
     n_structures=100,  # Or user-specified
     sort_by='ewald',  # Lowest energy orderings first
     add_oxidation_states=True,
@@ -891,7 +890,7 @@ Ionic + charge balance critical? → YES: pymatgen_ion_exchange_generator
 Structures have partial occupancies? → NO: skip to defects
                                      → YES: continue
     ↓
-Need ALL orderings? → YES: pymatgen_enumeration_generator (max_cell_size ≤ 4)
+Need ALL orderings? → YES: pymatgen_enumeration_generator (supercell_size ≤ 2)
                    → NO: Modeling disorder? → YES: pymatgen_sqs_generator
                                             → NO: skip
     ↓
@@ -911,15 +910,8 @@ DONE
 ## Pitfalls and Gotchas
 
 **`enumeration_generator` hangs or never returns**
-Cause: `max_cell_size` too large for the number of mixing species. Combinatorial explosion.
-Fix: reduce `max_cell_size` to 2–3, or switch to `sqs_generator` for multicomponent systems.
-
-**`enumeration_generator` fails on Windows**
-Cause: The tool requires the `enum.x` (enumlib) binary on PATH. enumlib is not available
-natively on Windows — it can only be installed inside WSL.
-Fix: On Windows, fall back to `sqs_generator` (no binary dependency; uses a built-in MC
-backend). If ground-state enumeration is essential, run via WSL:
-`wsl conda install -c conda-forge enumlib` then add the WSL binary path to the Windows PATH.
+Cause: `supercell_size` too large for the number of mixing species. Combinatorial explosion.
+Fix: reduce `supercell_size` to 1–2, or switch to `sqs_generator` for multicomponent systems.
 
 **Never bypass MCP tools by calling pymatgen directly in scripts**
 Cause: Writing script code that calls pymatgen transformation classes (e.g.
@@ -985,7 +977,7 @@ ATAT and set `use_mcsqs=True`.
 | Build from spacegroup | `prototype_builder` | `spacegroup`, `species`, `lattice_parameters` |
 | Isostructural analogues | `substitution_generator` | `substitutions`, `n_structures` |
 | Charge-neutral ion swap | `ion_exchange_generator` | `replace_ion`, `with_ions`, `exchange_fraction` |
-| Enumerate all orderings | `enumeration_generator` | `max_cell_size ≤ 4`, `sort_by='ewald'` |
+| Enumerate all orderings | `enumeration_generator` | `supercell_size ≤ 2`, `sort_by='ewald'` |
 | Best quasirandom cell | `sqs_generator` | `supercell_size`, `n_mc_steps`, `n_structures` |
 | Point defect supercells | `defect_generator` | `vacancy/substitution/interstitial_species`, `supercell_min_atoms` |
 | Rattle / strain ensemble | `perturbation_generator` | `displacement_max`, `strain_percent`, `n_structures` |
