@@ -7,26 +7,40 @@ Run with: pytest tests/image_retrieval/test_for_all_three_tools.py -v
 """
 
 import pytest
+import os
+import shutil
+from os import listdir
+from os.path import isfile, join
 
 from tools.image_retrieval.sem_image_classfication import classfication_sem
 from tools.image_retrieval.image_segmentation import extract_all_subfigures
 from tools.image_retrieval.paper_image_extract import get_paper_figure
 
 
-#from .sem_image_classfication import classfication_sem
-#from .image_segmentation import extract_all_subfigures
-#from .paper_image_extract import get_paper_figure
-from os import listdir
-from os.path import isfile, join
+# Get the directory containing this test file
+TEST_DIR = os.path.dirname(os.path.abspath(__file__))
 
-
-pdf_path = "./pdf_folder"
-pdf_image_output_path = "./pdf_image"
-pdf_image_sub_figure_path = "./subfigures"
-sem_image_folder = "./classification"
+pdf_path = os.path.join(TEST_DIR, "pdf_folder")
+pdf_image_output_path = os.path.join(TEST_DIR, "pdf_image")
+pdf_image_sub_figure_path = os.path.join(TEST_DIR, "subfigures")
+sem_image_folder = os.path.join(TEST_DIR, "classification")
 
 
 class TestImageSegmentation:
+    @classmethod
+    def setup_class(cls):
+        """Clean up any existing test output directories before running tests"""
+        for path in [pdf_image_output_path, pdf_image_sub_figure_path, sem_image_folder]:
+            if os.path.exists(path):
+                shutil.rmtree(path)
+    
+    @classmethod
+    def teardown_class(cls):
+        """Clean up generated files after all tests complete"""
+        for path in [pdf_image_output_path, pdf_image_sub_figure_path, sem_image_folder]:
+            if os.path.exists(path):
+                shutil.rmtree(path)
+    
     def test_get_paper_figure(self):
         """Extract figures from sample pdf, assert output image file in the directory is larger than 1"""
         get_paper_figure(pdf_path, pdf_image_output_path)
