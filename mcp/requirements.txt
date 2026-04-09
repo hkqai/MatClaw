@@ -12,7 +12,6 @@ docling>=2.84.0
 docling-core>=2.71.0
 dscribe>=2.1.2
 numpy>=2.4.4
-#torch==2.2.1
 torch>=2.10.0
 torch-scatter
 torch-geometric>=2.7.0

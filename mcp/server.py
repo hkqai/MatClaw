@@ -55,7 +55,6 @@ from tools.active_learning import (
 )
 from tools.characterization import (
     xrd_analyze_pattern,
-    arrows_record_result,
 )
 from tools.characterization import (
     xrd_analyze_pattern,
