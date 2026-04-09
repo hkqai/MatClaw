@@ -48,6 +48,10 @@ from tools.synthesis_planning import (
     template_route_generator,
     synthesis_recipe_quantifier,
 )
+from tools.elemwise_retro import (
+    predict_precursors,
+    predict_temperature,
+)
 from tools.active_learning import (
     arrows_prepare_campaign,
     arrows_suggest_experiment,

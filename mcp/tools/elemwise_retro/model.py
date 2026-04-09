@@ -6,7 +6,18 @@ from collections import Counter
 from scipy.stats import mode
 from torch_geometric.nn import MessagePassing
 from torch_geometric.utils import add_self_loops, degree
-from torch_scatter import scatter_add, scatter_max, scatter_mean
+
+# torch_scatter is an optional dependency - check if available
+try:
+    from torch_scatter import scatter_add, scatter_max, scatter_mean
+except ImportError:
+    raise ImportError(
+        "torch_scatter is required for elemwise_retro tools but not installed.\n"
+        "Install it with one of these commands:\n"
+        "  For GLIBC >= 2.32: pip install torch-scatter -f https://data.pyg.org/whl/torch-2.10.0+cpu.html\n"
+        "  For GLIBC <  2.32: pip install torch-scatter --no-binary torch-scatter --no-build-isolation\n"
+        "See requirements.txt for more details."
+    )
 
 class PrecursorClassifier(nn.Module):
     """
