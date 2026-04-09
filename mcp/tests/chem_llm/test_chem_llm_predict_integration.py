@@ -37,15 +37,6 @@ def _require_runtime_dependencies() -> None:
     )
 
 
-def _set_hf_token_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    hf_token = os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACEHUB_API_TOKEN")
-    if not hf_token:
-        pytest.skip(
-            "Missing Hugging Face token. Set HF_TOKEN or HUGGINGFACEHUB_API_TOKEN."
-        )
-    monkeypatch.setenv("HF_TOKEN", hf_token)
-
-
 def _print_inference_result(test_name: str, result: dict) -> None:
     print(
         f"\n[{test_name}] success={result.get('success')} prediction={result.get('prediction')}")
@@ -72,7 +63,6 @@ def _assert_inference_result(
 def test_real_binding_inference_smoke(monkeypatch: pytest.MonkeyPatch):
     _require_real_inference_enabled()
     _require_runtime_dependencies()
-    _set_hf_token_from_env(monkeypatch)
 
     result = predict_molecule_binding(smiles="CCO", target="EGFR")
     _print_inference_result("binding:CCO:EGFR", result)
@@ -98,7 +88,6 @@ def test_real_synthesizability_inference_smoke(
 ):
     _require_real_inference_enabled()
     _require_runtime_dependencies()
-    _set_hf_token_from_env(monkeypatch)
 
     result = predict_molecule_synthesizability(smiles=smiles)
     _print_inference_result(f"synth:{smiles}", result)

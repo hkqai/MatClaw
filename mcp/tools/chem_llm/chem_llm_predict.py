@@ -41,9 +41,9 @@ def _resolve_torch_dtype(torch_module: Any, dtype_name: str) -> Any:
     return mapping[dtype_name]
 
 
-def _get_or_load_model(repo_id: str, hf_token: Optional[str]) -> tuple[Any, Any]:
+def _get_or_load_model(repo_id: str) -> tuple[Any, Any]:
     """Load fixed tokenizer/model once and reuse across calls."""
-    cache_key = (repo_id, hf_token)
+    cache_key = (repo_id)
     if cache_key in _MODEL_CACHE:
         return _MODEL_CACHE[cache_key]
 
@@ -53,7 +53,6 @@ def _get_or_load_model(repo_id: str, hf_token: Optional[str]) -> tuple[Any, Any]
     tokenizer = AutoTokenizer.from_pretrained(
         repo_id,
         subfolder=SUBFOLDER,
-        token=hf_token,
     )
 
     model = AutoModelForCausalLM.from_pretrained(
@@ -61,7 +60,6 @@ def _get_or_load_model(repo_id: str, hf_token: Optional[str]) -> tuple[Any, Any]
         subfolder=SUBFOLDER,
         torch_dtype=_resolve_torch_dtype(torch, TORCH_DTYPE),
         device_map=DEVICE_MAP,
-        token=hf_token,
     )
 
     _MODEL_CACHE[cache_key] = (tokenizer, model)
@@ -98,7 +96,6 @@ def _run_prediction(
         "smiles": smiles,
         "repo_id": repo_id,
     }
-    hf_token = os.getenv("HF_TOKEN")
 
     try:
         import torch  # type: ignore
@@ -111,8 +108,7 @@ def _run_prediction(
         }
 
     try:
-        tokenizer, model = _get_or_load_model(
-            repo_id=repo_id, hf_token=hf_token)
+        tokenizer, model = _get_or_load_model(repo_id=repo_id)
         inputs = tokenizer(prompt, return_tensors="pt")
 
         model_device = getattr(model, "device", None)
