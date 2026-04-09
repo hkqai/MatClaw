@@ -23,10 +23,10 @@ def get_paper_figure(paper_path, output_dir):
     Examples:
         get_paper_figure("./paper_folder", "./result")
     """
-    papers = [join(paper_path, f) for f in listdir(paper_path) if isfile(join(paper_path, f))]
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    #logging.basicConfig(level=logging.INFO)
+    papers = [join(paper_path, f) for f in listdir(paper_path) if isfile(join(paper_path, f))]
+
     for file in papers:
         input_doc_path = file
     
@@ -56,24 +56,11 @@ def get_paper_figure(paper_path, output_dir):
             total_page_no += 1
     
         if total_page_no > 2:
-            #for page_no, page in conv_res.document.pages.items():
-            #    page_no = page.page_no
-            #    page_image_filename = output_dir / f"{doc_filename}-{page_no}.png"
-            #    with page_image_filename.open("wb") as fp:
-            #        page.image.pil_image.save(fp, format="PNG")
         
             # Save images of figures and tables
             table_counter = 0
             picture_counter = 0
             for element, _level in conv_res.document.iterate_items():
-                #print(element)
-                #if isinstance(element, TableItem):
-                #    table_counter += 1
-                #    element_image_filename = (
-                #        output_dir / f"{doc_filename}-table-{table_counter}.png"
-                #    )
-                #    with element_image_filename.open("wb") as fp:
-                #        element.get_image(conv_res.document).save(fp, "PNG")
         
                 if isinstance(element, PictureItem):
                     if element.meta.classification.predictions[0].class_name != "icon" and element.meta.classification.predictions[0].class_name != "logo":
