@@ -9,7 +9,7 @@ from unittest.mock import patch, MagicMock, mock_open
 import torch
 import json
 from tools.elemwise_retro.er_predict_precursors import (
-    predict_precursors,
+    er_predict_precursors,
     _get_source_elements,
     _composition_to_graph,
     _add_source_mask,
@@ -23,32 +23,32 @@ class TestInputValidation:
     def test_empty_target_formula_raises_error(self):
         """Empty target formula should raise ValueError."""
         with pytest.raises(ValueError, match="target_formula must be a non-empty string"):
-            predict_precursors("", top_k=5)
+            er_predict_precursors("", top_k=5)
     
     def test_whitespace_target_formula_raises_error(self):
         """Whitespace-only target formula should raise ValueError."""
         with pytest.raises(ValueError, match="target_formula must be a non-empty string"):
-            predict_precursors("   ", top_k=5)
+            er_predict_precursors("   ", top_k=5)
     
     def test_none_target_formula_raises_error(self):
         """None target formula should raise ValueError."""
         with pytest.raises(ValueError, match="target_formula must be a non-empty string"):
-            predict_precursors(None, top_k=5)
+            er_predict_precursors(None, top_k=5)
     
     def test_invalid_top_k_type_raises_error(self):
         """Non-integer top_k should raise ValueError."""
         with pytest.raises(ValueError, match="top_k must be an integer"):
-            predict_precursors("Li2O", top_k="5")
+            er_predict_precursors("Li2O", top_k="5")
     
     def test_top_k_too_small_raises_error(self):
         """top_k < 1 should raise ValueError."""
         with pytest.raises(ValueError, match="top_k must be an integer between 1 and 20"):
-            predict_precursors("Li2O", top_k=0)
+            er_predict_precursors("Li2O", top_k=0)
     
     def test_top_k_too_large_raises_error(self):
         """top_k > 20 should raise ValueError."""
         with pytest.raises(ValueError, match="top_k must be an integer between 1 and 20"):
-            predict_precursors("Li2O", top_k=21)
+            er_predict_precursors("Li2O", top_k=21)
     
     def test_valid_top_k_boundary_values(self):
         """top_k = 1 and top_k = 20 should be accepted."""
@@ -63,10 +63,10 @@ class TestInputValidation:
             mock_get.return_value = mock_predictor
             
             # Should not raise
-            result1 = predict_precursors("Li2O", top_k=1)
+            result1 = er_predict_precursors("Li2O", top_k=1)
             assert result1["target"] == "Li2O"
             
-            result20 = predict_precursors("Li2O", top_k=20)
+            result20 = er_predict_precursors("Li2O", top_k=20)
             assert result20["target"] == "Li2O"
 
 
@@ -237,11 +237,11 @@ class TestPrecursorPredictor:
 
 
 class TestPredictPrecursors:
-    """Tests for the main predict_precursors function."""
+    """Tests for the main er_predict_precursors function."""
     
     @patch('tools.elemwise_retro.er_predict_precursors._get_predictor')
     def test_predict_precursors_calls_predictor(self, mock_get_predictor):
-        """Test that predict_precursors calls the predictor correctly."""
+        """Test that er_predict_precursors calls the predictor correctly."""
         mock_predictor = MagicMock()
         expected_result = {
             "target": "LiFePO4",
@@ -254,7 +254,7 @@ class TestPredictPrecursors:
         mock_predictor.predict.return_value = expected_result
         mock_get_predictor.return_value = mock_predictor
         
-        result = predict_precursors("LiFePO4", top_k=5)
+        result = er_predict_precursors("LiFePO4", top_k=5)
         
         mock_predictor.predict.assert_called_once_with("LiFePO4", 5)
         assert result == expected_result
@@ -267,7 +267,7 @@ class TestPredictPrecursors:
         mock_get_predictor.return_value = mock_predictor
         
         with pytest.raises(RuntimeError, match="Precursor prediction failed"):
-            predict_precursors("Li2O", top_k=5)
+            er_predict_precursors("Li2O", top_k=5)
     
     @patch('tools.elemwise_retro.er_predict_precursors._get_predictor')
     def test_predict_precursors_default_top_k(self, mock_get_predictor):
@@ -281,7 +281,7 @@ class TestPredictPrecursors:
         }
         mock_get_predictor.return_value = mock_predictor
         
-        predict_precursors("Li2O")
+        er_predict_precursors("Li2O")
         
         # Should be called with default top_k=5
         mock_predictor.predict.assert_called_once_with("Li2O", 5)
@@ -306,7 +306,7 @@ class TestRealWorldScenarios:
         }
         mock_get_predictor.return_value = mock_predictor
         
-        result = predict_precursors("LiFePO4", top_k=3)
+        result = er_predict_precursors("LiFePO4", top_k=3)
         
         assert result["target"] == "LiFePO4"
         assert len(result["precursor_sets"]) == 3
@@ -330,7 +330,7 @@ class TestRealWorldScenarios:
         }
         mock_get_predictor.return_value = mock_predictor
         
-        result = predict_precursors("Li7La3Zr2O12", top_k=2)
+        result = er_predict_precursors("Li7La3Zr2O12", top_k=2)
         
         assert result["target"] == "Li7La3Zr2O12"
         assert len(result["precursor_sets"]) == 2
@@ -353,7 +353,7 @@ class TestEdgeCases:
             mock_get.return_value = mock_predictor
             
             with pytest.raises(RuntimeError, match="Precursor prediction failed"):
-                predict_precursors("XyZ123Invalid", top_k=5)
+                er_predict_precursors("XyZ123Invalid", top_k=5)
     
     @patch('tools.elemwise_retro.er_predict_precursors._get_predictor')
     def test_single_precursor_prediction(self, mock_get_predictor):
@@ -369,7 +369,7 @@ class TestEdgeCases:
         }
         mock_get_predictor.return_value = mock_predictor
         
-        result = predict_precursors("Li2O", top_k=1)
+        result = er_predict_precursors("Li2O", top_k=1)
         
         assert len(result["precursor_sets"]) == 1
         assert result["top_prediction"] == result["precursor_sets"][0]

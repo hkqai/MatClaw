@@ -454,7 +454,7 @@ def _get_predictor() -> PrecursorPredictor:
 # MCP Tool Function
 # ============================================================================
 
-def predict_precursors(
+def er_predict_precursors(
     target_formula: str,
     top_k: int = 5,
     return_individual: bool = False
@@ -481,7 +481,7 @@ def predict_precursors(
         - metadata: Model and device information
     
     Example:
-        >>> result = predict_precursors("Li7La3Zr2O12", top_k=3)
+        >>> result = er_predict_precursors("Li7La3Zr2O12", top_k=3)
         >>> print(result['top_prediction'])
         {'precursors': ['Li2CO3', 'La2O3', 'ZrO2'], 'confidence': 0.6121}
     
@@ -533,7 +533,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     # Run prediction
-    result = predict_precursors(args.target, args.top_k)
+    result = er_predict_precursors(args.target, args.top_k)
     
     if args.json:
         print(json.dumps(result, indent=2))

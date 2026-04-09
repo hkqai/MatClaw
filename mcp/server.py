@@ -49,8 +49,8 @@ from tools.synthesis_planning import (
     synthesis_recipe_quantifier,
 )
 from tools.elemwise_retro import (
-    predict_precursors,
-    predict_temperature,
+    er_predict_precursors,
+    er_predict_temperature,
 )
 from tools.active_learning import (
     arrows_prepare_campaign,
@@ -127,9 +127,13 @@ mcp.tool()(structure_fingerprinter)
 # Selection and ranking tools
 mcp.tool()(multi_objective_ranker)
 
-# Experiment planning tools
+# Synthesis planning tools
 mcp.tool()(template_route_generator)
 mcp.tool()(synthesis_recipe_quantifier)
+
+# ElemwiseRetro tools
+mcp.tool()(er_predict_precursors)
+mcp.tool()(er_predict_temperature)
 
 # Active learning tools (ARROWS)
 mcp.tool()(arrows_prepare_campaign)

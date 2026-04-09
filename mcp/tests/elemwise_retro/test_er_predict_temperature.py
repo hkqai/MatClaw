@@ -9,7 +9,7 @@ from unittest.mock import patch, MagicMock, mock_open
 import torch
 import json
 from tools.elemwise_retro.er_predict_temperature import (
-    predict_temperature,
+    er_predict_temperature,
     _get_source_elements,
     _composition_to_graph,
     _add_source_mask,
@@ -23,37 +23,37 @@ class TestInputValidation:
     def test_empty_target_formula_raises_error(self):
         """Empty target formula should raise ValueError."""
         with pytest.raises(ValueError, match="target_formula must be a non-empty string"):
-            predict_temperature("", ["Li2O"])
+            er_predict_temperature("", ["Li2O"])
     
     def test_whitespace_target_formula_raises_error(self):
         """Whitespace-only target formula should raise ValueError."""
         with pytest.raises(ValueError, match="target_formula must be a non-empty string"):
-            predict_temperature("   ", ["Li2O"])
+            er_predict_temperature("   ", ["Li2O"])
     
     def test_none_target_formula_raises_error(self):
         """None target formula should raise ValueError."""
         with pytest.raises(ValueError, match="target_formula must be a non-empty string"):
-            predict_temperature(None, ["Li2O"])
+            er_predict_temperature(None, ["Li2O"])
     
     def test_empty_precursor_list_raises_error(self):
         """Empty precursor list should raise ValueError."""
         with pytest.raises(ValueError, match="precursors must be a non-empty list"):
-            predict_temperature("Li2O", [])
+            er_predict_temperature("Li2O", [])
     
     def test_none_precursor_list_raises_error(self):
         """None precursor list should raise ValueError."""
         with pytest.raises(ValueError, match="precursors must be a non-empty list"):
-            predict_temperature("Li2O", None)
+            er_predict_temperature("Li2O", None)
     
     def test_non_list_precursor_raises_error(self):
         """Non-list precursor argument should raise ValueError."""
         with pytest.raises(ValueError, match="precursors must be a non-empty list"):
-            predict_temperature("Li2O", "Li2O")
+            er_predict_temperature("Li2O", "Li2O")
     
     def test_non_string_precursor_raises_error(self):
         """Non-string items in precursor list should raise ValueError."""
         with pytest.raises(ValueError, match="all precursors must be strings"):
-            predict_temperature("Li2O", ["Li2O", 123])
+            er_predict_temperature("Li2O", ["Li2O", 123])
     
     def test_valid_inputs_accepted(self):
         """Valid inputs should be accepted without error."""
@@ -69,7 +69,7 @@ class TestInputValidation:
             mock_get.return_value = mock_predictor
             
             # Should not raise
-            result = predict_temperature("Li2O", ["Li2O"])
+            result = er_predict_temperature("Li2O", ["Li2O"])
             assert result["target"] == "Li2O"
 
 
@@ -260,11 +260,11 @@ class TestTemperaturePredictor:
 
 
 class TestPredictTemperature:
-    """Tests for the main predict_temperature function."""
+    """Tests for the main er_predict_temperature function."""
     
     @patch('tools.elemwise_retro.er_predict_temperature._get_predictor')
     def test_predict_temperature_calls_predictor(self, mock_get_predictor):
-        """Test that predict_temperature calls the predictor correctly."""
+        """Test that er_predict_temperature calls the predictor correctly."""
         mock_predictor = MagicMock()
         expected_result = {
             "target": "LiFePO4",
@@ -276,7 +276,7 @@ class TestPredictTemperature:
         mock_predictor.predict.return_value = expected_result
         mock_get_predictor.return_value = mock_predictor
         
-        result = predict_temperature("LiFePO4", ["Li2CO3", "Fe2O3", "P2O5"])
+        result = er_predict_temperature("LiFePO4", ["Li2CO3", "Fe2O3", "P2O5"])
         
         mock_predictor.predict.assert_called_once_with("LiFePO4", ["Li2CO3", "Fe2O3", "P2O5"])
         assert result == expected_result
@@ -289,7 +289,7 @@ class TestPredictTemperature:
         mock_get_predictor.return_value = mock_predictor
         
         with pytest.raises(ValueError, match="Element mismatch"):
-            predict_temperature("Li2O", ["Fe2O3"])
+            er_predict_temperature("Li2O", ["Fe2O3"])
     
     @patch('tools.elemwise_retro.er_predict_temperature._get_predictor')
     def test_predict_temperature_propagates_runtime_error(self, mock_get_predictor):
@@ -299,7 +299,7 @@ class TestPredictTemperature:
         mock_get_predictor.return_value = mock_predictor
         
         with pytest.raises(RuntimeError, match="Temperature prediction failed"):
-            predict_temperature("Li2O", ["Li2O"])
+            er_predict_temperature("Li2O", ["Li2O"])
 
 
 class TestRealWorldScenarios:
@@ -322,7 +322,7 @@ class TestRealWorldScenarios:
         }
         mock_get_predictor.return_value = mock_predictor
         
-        result = predict_temperature("LiFePO4", ["Li2CO3", "Fe2O3", "P2O5"])
+        result = er_predict_temperature("LiFePO4", ["Li2CO3", "Fe2O3", "P2O5"])
         
         assert result["target"] == "LiFePO4"
         assert result["temperature_celsius"] == 850.0
@@ -347,7 +347,7 @@ class TestRealWorldScenarios:
         }
         mock_get_predictor.return_value = mock_predictor
         
-        result = predict_temperature("Li7La3Zr2O12", ["Li2CO3", "La2O3", "ZrO2"])
+        result = er_predict_temperature("Li7La3Zr2O12", ["Li2CO3", "La2O3", "ZrO2"])
         
         assert result["target"] == "Li7La3Zr2O12"
         assert result["precursors"] == ["Li2CO3", "La2O3", "ZrO2"]
@@ -380,8 +380,8 @@ class TestRealWorldScenarios:
         ]
         mock_get_predictor.return_value = mock_predictor
         
-        result1 = predict_temperature("Li2O", ["Li2CO3"])
-        result2 = predict_temperature("Li2O", ["LiOH"])
+        result1 = er_predict_temperature("Li2O", ["Li2CO3"])
+        result2 = er_predict_temperature("Li2O", ["LiOH"])
         
         # Different precursors should potentially give different temperatures
         # (though not guaranteed - this is just showing the API works)
@@ -400,7 +400,7 @@ class TestEdgeCases:
             mock_get.return_value = mock_predictor
             
             with pytest.raises(ValueError, match="Element mismatch|Invalid composition"):
-                predict_temperature("XyZ123Invalid", ["Li2O"])
+                er_predict_temperature("XyZ123Invalid", ["Li2O"])
     
     def test_invalid_precursor_formula_handled(self):
         """Test that invalid precursor formulas are handled gracefully."""
@@ -410,7 +410,7 @@ class TestEdgeCases:
             mock_get.return_value = mock_predictor
             
             with pytest.raises(ValueError, match="Element mismatch|Invalid composition"):
-                predict_temperature("Li2O", ["InvalidFormula123"])
+                er_predict_temperature("Li2O", ["InvalidFormula123"])
     
     @patch('tools.elemwise_retro.er_predict_temperature._get_predictor')
     def test_single_precursor(self, mock_get_predictor):
@@ -425,7 +425,7 @@ class TestEdgeCases:
         }
         mock_get_predictor.return_value = mock_predictor
         
-        result = predict_temperature("Li2O", ["Li2O"])
+        result = er_predict_temperature("Li2O", ["Li2O"])
         
         assert len(result["precursors"]) == 1
         assert result["temperature_celsius"] == 1000.0
@@ -443,7 +443,7 @@ class TestEdgeCases:
         }
         mock_get_predictor.return_value = mock_predictor
         
-        result = predict_temperature("LiFeO2", ["Li2CO3", "Fe2O3", "FeO"])
+        result = er_predict_temperature("LiFeO2", ["Li2CO3", "Fe2O3", "FeO"])
         
         assert len(result["precursors"]) == 3
         assert result["temperature_celsius"] == 900.0
@@ -461,7 +461,7 @@ class TestEdgeCases:
         }
         mock_get_predictor.return_value = mock_predictor
         
-        result = predict_temperature("Li2O", ["Li2O"])
+        result = er_predict_temperature("Li2O", ["Li2O"])
         
         # Temperature should be physically reasonable
         # Solid-state synthesis typically 300-1500°C
@@ -488,9 +488,9 @@ class TestModelCaching:
         mock_get_predictor.return_value = mock_predictor
         
         # Make multiple predictions
-        predict_temperature("Li2O", ["Li2O"])
-        predict_temperature("Li2O", ["Li2O"])
-        predict_temperature("Li2O", ["Li2O"])
+        er_predict_temperature("Li2O", ["Li2O"])
+        er_predict_temperature("Li2O", ["Li2O"])
+        er_predict_temperature("Li2O", ["Li2O"])
         
         # _get_predictor should be called multiple times, but it returns the same instance
         assert mock_get_predictor.call_count == 3

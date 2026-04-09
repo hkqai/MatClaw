@@ -426,7 +426,7 @@ def _get_predictor() -> TemperaturePredictor:
 # MCP Tool Function
 # ============================================================================
 
-def predict_temperature(
+def er_predict_temperature(
     target_formula: str,
     precursors: List[str]
 ) -> Dict[str, Any]:
@@ -453,7 +453,7 @@ def predict_temperature(
         - metadata: Model and device information
     
     Example:
-        >>> result = predict_temperature("Li7La3Zr2O12", ["Li2CO3", "La2O3", "ZrO2"])
+        >>> result = er_predict_temperature("Li7La3Zr2O12", ["Li2CO3", "La2O3", "ZrO2"])
         >>> print(result['temperature_celsius'])
         908.3
     
@@ -511,7 +511,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     # Run prediction
-    result = predict_temperature(args.target, args.precursors)
+    result = er_predict_temperature(args.target, args.precursors)
     
     if args.json:
         print(json.dumps(result, indent=2))
