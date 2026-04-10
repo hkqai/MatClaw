@@ -9,6 +9,7 @@ from pydantic import Field
 from mp_api.client import MPRester
 import os
 import re
+from utils.literature_utils import get_paper_metadata_from_doi
 
 
 def mp_search_recipe(
@@ -129,7 +130,7 @@ def mp_search_recipe(
             description="Specific fields to return in recipe data. "
             "Available fields: 'target', 'precursors', 'operations', 'conditions', "
             "'temperature', 'time', 'atmosphere', 'product_characterization', "
-            "'doi', 'citation', 'year', 'authors'. "
+            "'doi', 'citation', 'year'. "
             "If None, returns all available fields."
         )
     ] = None,
@@ -221,7 +222,6 @@ def mp_search_recipe(
                 - doi: Publication DOI
                 - citation: Full citation
                 - year: Publication year
-                - authors: Paper authors
                 - recipe_id: Unique identifier
             - warnings: List of any warnings or notes
             - error: Error message if search failed
@@ -286,7 +286,6 @@ def mp_search_recipe(
         with MPRester(api_key) as mpr:
             try:
                 if mpr.materials and hasattr(mpr.materials, 'synthesis'):
-                    synthesis_client = mpr.materials.synthesis
 
                     search_kwargs = {}
                     # target_formula: accepts single string only
@@ -322,15 +321,7 @@ def mp_search_recipe(
                     if heating_time_max is not None:
                         search_kwargs['condition_heating_time_max'] = heating_time_max
                     
-                    # Execute search
-                    results = synthesis_client.search(**search_kwargs, num_chunks=limit)
-                    
-                elif hasattr(mpr, 'get_synthesis_recipes'):
-                    # Alternative method name
-                    results = mpr.get_synthesis_recipes(
-                        formula=target_formula[0] if target_formula and len(target_formula) == 1 else None,
-                        num_chunks=limit
-                    )
+                    results = mpr.materials.synthesis.search(**search_kwargs, num_chunks=limit)
                     
                 else:
                     return {
@@ -436,13 +427,22 @@ def mp_search_recipe(
                     # Extract year from DOI if not directly available
                     year = result_dict.get('year') or result_dict.get('publication_year')
                     if not year and recipe['doi']:
-                        # Extract only full 4-digit years from DOI
+                        # Try extracting year from DOI pattern first
                         # Examples: 10.1016/j.matlet.2012.04.115 -> 2012
                         year_match = re.search(r'[./\-](19\d{2}|20\d{2})(?=[./\-])', recipe['doi'])
                         if year_match:
                             year = int(year_match.group(1))
+                        
+                        # If pattern matching failed, try CrossRef API as fallback
+                        if not year and get_paper_metadata_from_doi is not None:
+                            try:
+                                doi_metadata = get_paper_metadata_from_doi(recipe['doi'])
+                                if doi_metadata and doi_metadata.get('year'):
+                                    year = doi_metadata['year']
+                            except Exception:
+                                # Silently fail - year will remain None
+                                pass
                     recipe['year'] = year
-                    recipe['authors'] = result_dict.get('authors')
                     
                     # Additional fields
                     recipe['synthesis_type'] = result_dict.get('synthesis_type')
@@ -457,7 +457,7 @@ def mp_search_recipe(
                 
                 # Apply client-side filtering (MP API doesn't always filter correctly)
                 filtered_recipes = recipes
-                
+
                 # Filter by year_min if specified
                 # Only filter out recipes with known years that are too old
                 # Keep recipes where year cannot be determined
