@@ -14,7 +14,6 @@ from typing import List, Dict, Any, Tuple
 
 import numpy as np
 import torch
-import pickle as pk
 from pymatgen.core import Composition
 
 # torch_scatter is an optional dependency - check if available
@@ -29,11 +28,89 @@ except ImportError:
         "See requirements.txt for more details."
     )
 
-# Import model module for pickle unpickling
-from . import model
-
 # Import model downloader for automatic model downloads
 from utils import model_downloader
+
+# Import model classes for instantiation
+from .model import TemperatureRegressor, Normalizer
+
+
+def load_temperature_model_with_hyperparameters(file_path, device='cpu'):
+    """Load a TemperatureRegressor model from checkpoint with hyperparameters.
+    
+    Args:
+        file_path: Path to the .pt checkpoint file
+        device: Device to load model on ('cpu' or 'cuda')
+    
+    Returns:
+        Loaded model in eval mode
+    """
+    # Load checkpoint
+    checkpoint = torch.load(file_path, map_location=device, weights_only=False)
+    
+    if not isinstance(checkpoint, dict) or 'hyperparameters' not in checkpoint:
+        raise ValueError(f"Model file {file_path} must contain 'hyperparameters' key")
+    
+    # Get hyperparameters and state dict
+    hyperparams = checkpoint['hyperparameters']
+    state_dict = checkpoint['model_state_dict']
+    
+    # Instantiate model with hyperparameters (override device to use current device)
+    model = TemperatureRegressor(
+        task=hyperparams['task'],
+        pooling=hyperparams['pooling'],
+        globalfactor=hyperparams['globalfactor'],
+        device=device,  # Use specified device, not saved device
+        robust=hyperparams['robust'],
+        n_targets=hyperparams['n_targets'],
+        elem_emb_len=hyperparams['elem_emb_len'],
+        elem_fea_len=hyperparams.get('elem_fea_len', 64),
+        n_graph=hyperparams.get('n_graph', 3),
+        elem_heads=hyperparams.get('elem_heads', 3),
+        elem_gate=hyperparams.get('elem_gate', [256]),
+        elem_msg=hyperparams.get('elem_msg', [256]),
+        cry_heads=hyperparams.get('cry_heads', 3),
+        cry_gate=hyperparams.get('cry_gate', [256]),
+        cry_msg=hyperparams.get('cry_msg', [256]),
+        out_hidden=hyperparams.get('out_hidden', [1024, 512, 256, 128, 64]),
+    )
+    
+    # Load state dict
+    model.load_state_dict(state_dict)
+    model.eval()
+    
+    return model
+
+
+def load_normalizer_from_checkpoint(file_path):
+    """Load Normalizer from checkpoint file with state dict.
+    
+    Args:
+        file_path: Path to the .pt checkpoint file
+    
+    Returns:
+        Loaded Normalizer object
+    """
+    checkpoint = torch.load(file_path, map_location='cpu', weights_only=False)
+    
+    if not isinstance(checkpoint, dict):
+        raise ValueError(f"Normalizer file {file_path} must be a dict, got {type(checkpoint)}")
+    
+    # Handle different dict formats
+    if 'model_state_dict' in checkpoint:
+        # Same format as models: {model_state_dict: {...}, hyperparameters: {...}}
+        state_dict = checkpoint['model_state_dict']
+    elif 'state_dict' in checkpoint:
+        state_dict = checkpoint['state_dict']
+    elif 'mean' in checkpoint and 'std' in checkpoint:
+        state_dict = checkpoint
+    else:
+        raise ValueError(f"Normalizer file {file_path} must contain 'model_state_dict', 'state_dict' or 'mean'/'std' keys")
+    
+    normalizer = Normalizer()
+    normalizer.load_state_dict(state_dict)
+    return normalizer
+
 
 # ================================================================================================
 # CONSTANTS - Element Classifications
@@ -320,8 +397,9 @@ def _predict_synthesis_temperature_internal(
         output, _ = model(input_tar, input_pre)
         output, log_std = output.chunk(2, dim=1)
         pred = normalizer.denorm(output.data.cpu())
+        uncertainty = torch.exp(log_std).data.cpu()
     
-    return round(pred[0].item(), 1)
+    return round(pred[0].item(), 1), round(uncertainty[0].item(), 1)
 
 
 # ============================================================================
@@ -342,9 +420,9 @@ class TemperaturePredictor:
         Initialize predictor (models loaded lazily on first use).
         
         Args:
-            base_dir: Base directory for model files. If None, uses parent of this file.
+            base_dir: Base directory for model files. If None, uses directory of this file.
         """
-        self.base_dir = base_dir or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        self.base_dir = base_dir or os.path.dirname(os.path.abspath(__file__))
         self.model = None
         self.normalizer = None
         self.device = None
@@ -365,12 +443,11 @@ class TemperaturePredictor:
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         
         model_path = model_downloader.get_model_path('elemwiseretro_temperature_predictor')
-        self.model = pk.load(open(model_path, 'rb'))
+        self.model = load_temperature_model_with_hyperparameters(model_path, device=self.device)
         self.model.to(self.device)
-        self.model.eval()
         
         normalizer_path = model_downloader.get_model_path('elemwiseretro_temperature_normalizer')
-        self.normalizer = pk.load(open(normalizer_path, 'rb'))
+        self.normalizer = load_normalizer_from_checkpoint(normalizer_path)
         
         self._loaded = True
     
@@ -388,7 +465,7 @@ class TemperaturePredictor:
         self._ensure_loaded()
         
         target_composition = [target_formula]
-        predicted_temp = _predict_synthesis_temperature_internal(
+        predicted_temp, uncertainty = _predict_synthesis_temperature_internal(
             target_composition,
             precursors,
             self.model,
@@ -400,10 +477,12 @@ class TemperaturePredictor:
         return {
             "target": target_formula,
             "precursors": precursors,
-            "temperature_celsius": float(predicted_temp),
+            "predicted_temperature_celsius": float(predicted_temp),
+            "uncertainty_celsius": float(uncertainty),
             "temperature_kelvin": float(predicted_temp + 273.15),
             "metadata": {
                 "model_type": "ElemwiseRetro",
+                "model_version": "v2.0",
                 "device": str(self.device),
                 "temperature_unit": "celsius"
             }
