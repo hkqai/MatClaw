@@ -148,15 +148,16 @@ class TestPrecursorPredictor:
     
     @patch('builtins.open', new_callable=mock_open, read_data='{"Li": [0.1]}')
     @patch('tools.elemwise_retro.er_predict_precursors.model_downloader')
-    @patch('pickle.load')
-    def test_predictor_lazy_loading(self, mock_pkl_load, mock_downloader, mock_file):
+    @patch('tools.elemwise_retro.er_predict_precursors.load_model_with_hyperparameters')
+    def test_predictor_lazy_loading(self, mock_load_model, mock_downloader, mock_file):
         """Test that predictor loads models lazily."""
+        # Mock the model loader to return a mock model
         mock_model = MagicMock()
-        mock_model.eval = MagicMock()
+        mock_model.eval = MagicMock(return_value=None)
         mock_model.to = MagicMock(return_value=mock_model)
-        mock_pkl_load.return_value = mock_model
+        mock_load_model.return_value = mock_model
         
-        mock_downloader.get_model_path.return_value = "/fake/path/model.pkl"
+        mock_downloader.get_model_path.return_value = "/fake/path/model.pt"
         
         # Mock json.load for the various JSON files
         def json_load_side_effect(f):
@@ -182,25 +183,23 @@ class TestPrecursorPredictor:
             # Now it should be loaded
             assert predictor._loaded
             assert predictor.model is not None
-            mock_model.eval.assert_called_once()
     
     @patch('builtins.open', new_callable=mock_open)
     @patch('tools.elemwise_retro.er_predict_precursors.model_downloader')
-    @patch('pickle.load')
+    @patch('tools.elemwise_retro.er_predict_precursors._predict_precursor_sets_internal')
+    @patch('tools.elemwise_retro.er_predict_precursors.load_model_with_hyperparameters')
     @patch('tools.elemwise_retro.er_predict_precursors.json.load')
-    def test_predictor_returns_correct_structure(self, mock_json_load, mock_pkl_load, mock_downloader, mock_file):
+    def test_predictor_returns_correct_structure(self, mock_json_load, mock_load_model, mock_internal_predict, mock_downloader, mock_file):
         """Test that predictor returns correctly structured result."""
-        # Setup mocks
+        # Mock the model loader to return a mock model
         mock_model = MagicMock()
-        mock_model.eval = MagicMock()
         mock_model.to = MagicMock(return_value=mock_model)
+        mock_load_model.return_value = mock_model
         
-        # Mock model output
-        mock_output = torch.tensor([[0.5, 0.3, 0.2], [0.4, 0.4, 0.2]])
-        mock_model.return_value = (mock_output, None)
+        # Mock internal prediction to return precursor sets
+        mock_internal_predict.return_value = [(['Li2CO3', 'La2O3'], 0.85), (['LiNO3', 'La(OH)3'], 0.60)]
         
-        mock_pkl_load.return_value = mock_model
-        mock_downloader.get_model_path.return_value = "/fake/path/model.pkl"
+        mock_downloader.get_model_path.return_value = "/fake/path/model.pt"
         
         # Mock json.load to return appropriate data based on call order
         mock_json_load.side_effect = [

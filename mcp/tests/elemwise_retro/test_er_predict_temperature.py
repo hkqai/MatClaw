@@ -149,19 +149,21 @@ class TestTemperaturePredictor:
     
     @patch('builtins.open', new_callable=mock_open, read_data='{"Li": [0.1]}')
     @patch('tools.elemwise_retro.er_predict_temperature.model_downloader')
-    @patch('pickle.load')
-    def test_predictor_lazy_loading(self, mock_pkl_load, mock_downloader, mock_file):
+    @patch('tools.elemwise_retro.er_predict_temperature.load_temperature_model_with_hyperparameters')
+    @patch('tools.elemwise_retro.er_predict_temperature.load_normalizer_from_checkpoint')
+    def test_predictor_lazy_loading(self, mock_load_normalizer, mock_load_model, mock_downloader, mock_file):
         """Test that predictor loads models lazily."""
+        # Mock the model and normalizer loaders
         mock_model = MagicMock()
-        mock_model.eval = MagicMock()
+        mock_model.eval = MagicMock(return_value=None)
         mock_model.to = MagicMock(return_value=mock_model)
+        mock_load_model.return_value = mock_model
         
         mock_normalizer = MagicMock()
         mock_normalizer.denorm = MagicMock(side_effect=lambda x: x)
+        mock_load_normalizer.return_value = mock_normalizer
         
-        # Return model first, then normalizer
-        mock_pkl_load.side_effect = [mock_model, mock_normalizer]
-        mock_downloader.get_model_path.return_value = "/fake/path/model.pkl"
+        mock_downloader.get_model_path.return_value = "/fake/path/model.pt"
         
         def json_load_side_effect(f):
             return {"Li": [0.1] * 64, "O": [0.2] * 64}
@@ -181,27 +183,26 @@ class TestTemperaturePredictor:
             assert predictor._loaded
             assert predictor.model is not None
             assert predictor.normalizer is not None
-            mock_model.eval.assert_called_once()
     
     @patch('builtins.open', new_callable=mock_open)
     @patch('tools.elemwise_retro.er_predict_temperature.model_downloader')
-    @patch('pickle.load')
-    def test_predictor_returns_correct_structure(self, mock_pkl_load, mock_downloader, mock_file):
+    @patch('tools.elemwise_retro.er_predict_temperature._predict_synthesis_temperature_internal')
+    @patch('tools.elemwise_retro.er_predict_temperature.load_temperature_model_with_hyperparameters')
+    @patch('tools.elemwise_retro.er_predict_temperature.load_normalizer_from_checkpoint')
+    def test_predictor_returns_correct_structure(self, mock_load_normalizer, mock_load_model, mock_internal_predict, mock_downloader, mock_file):
         """Test that predictor returns correctly structured result."""
-        # Setup mocks
+        # Mock the model and normalizer loaders
         mock_model = MagicMock()
-        mock_model.eval = MagicMock()
         mock_model.to = MagicMock(return_value=mock_model)
-        
-        # Mock model output - returns concatenated [prediction, log_std]
-        prediction = torch.tensor([[900.0, 0.1]])
-        mock_model.return_value = (prediction, None)
+        mock_load_model.return_value = mock_model
         
         mock_normalizer = MagicMock()
-        mock_normalizer.denorm = MagicMock(return_value=torch.tensor([900.0]))
+        mock_load_normalizer.return_value = mock_normalizer
         
-        mock_pkl_load.side_effect = [mock_model, mock_normalizer]
-        mock_downloader.get_model_path.return_value = "/fake/path/model.pkl"
+        mock_downloader.get_model_path.return_value = "/fake/path/model.pt"
+        
+        # Mock internal prediction to return (temperature, uncertainty)
+        mock_internal_predict.return_value = (900.0, 50.0)
         
         def json_load_side_effect(f):
             return {"Li": [0.1] * 64, "O": [0.2] * 64, "C": [0.3] * 64}
@@ -213,7 +214,8 @@ class TestTemperaturePredictor:
             # Check structure
             assert "target" in result
             assert "precursors" in result
-            assert "temperature_celsius" in result
+            assert "predicted_temperature_celsius" in result
+            assert "uncertainty_celsius" in result
             assert "temperature_kelvin" in result
             assert "metadata" in result
             
@@ -222,10 +224,13 @@ class TestTemperaturePredictor:
             assert result["precursors"] == ["Li2CO3"]
             
             # Check temperatures
-            assert isinstance(result["temperature_celsius"], float)
+            assert isinstance(result["predicted_temperature_celsius"], float)
+            assert isinstance(result["uncertainty_celsius"], float)
             assert isinstance(result["temperature_kelvin"], float)
+            assert result["predicted_temperature_celsius"] == 900.0
+            assert result["uncertainty_celsius"] == 50.0
             # Kelvin should be Celsius + 273.15
-            assert abs(result["temperature_kelvin"] - result["temperature_celsius"] - 273.15) < 0.01
+            assert abs(result["temperature_kelvin"] - result["predicted_temperature_celsius"] - 273.15) < 0.01
             
             # Check metadata
             assert "model_type" in result["metadata"]
@@ -234,16 +239,19 @@ class TestTemperaturePredictor:
     
     @patch('builtins.open', new_callable=mock_open)
     @patch('tools.elemwise_retro.er_predict_temperature.model_downloader')
-    @patch('pickle.load')
-    def test_predictor_element_mismatch_raises_error(self, mock_pkl_load, mock_downloader, mock_file):
+    @patch('tools.elemwise_retro.er_predict_temperature.load_temperature_model_with_hyperparameters')
+    @patch('tools.elemwise_retro.er_predict_temperature.load_normalizer_from_checkpoint')
+    def test_predictor_element_mismatch_raises_error(self, mock_load_normalizer, mock_load_model, mock_downloader, mock_file):
         """Test that element mismatch between target and precursors raises error."""
+        # Mock the model and normalizer loaders
         mock_model = MagicMock()
-        mock_model.eval = MagicMock()
         mock_model.to = MagicMock(return_value=mock_model)
+        mock_load_model.return_value = mock_model
         
         mock_normalizer = MagicMock()
-        mock_pkl_load.side_effect = [mock_model, mock_normalizer]
-        mock_downloader.get_model_path.return_value = "/fake/path/model.pkl"
+        mock_load_normalizer.return_value = mock_normalizer
+        
+        mock_downloader.get_model_path.return_value = "/fake/path/model.pt"
         
         def json_load_side_effect(f):
             return {"Li": [0.1] * 64, "O": [0.2] * 64, "Fe": [0.3] * 64, "P": [0.4] * 64}

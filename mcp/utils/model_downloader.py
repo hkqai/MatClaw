@@ -14,9 +14,9 @@ import sys
 
 # Model URLs from GitHub releases
 MODEL_URLS = {
-    'elemwiseretro_precursor_predictor': 'https://github.com/VCERS/MatClaw/releases/download/v0.0.2/elemwiseretro-precursor-predictor-v1.0.sav',
-    'elemwiseretro_temperature_predictor': 'https://github.com/VCERS/MatClaw/releases/download/v0.0.2/elemwiseretro-temperature-predictor-v1.0.sav',
-    'elemwiseretro_temperature_normalizer': 'https://github.com/VCERS/MatClaw/releases/download/v0.0.2/elemwiseretro-temperature-normalizer-v1.0.sav',
+    'elemwiseretro_precursor_predictor': 'https://github.com/VCERS/MatClaw/releases/download/v0.0.3/elemwiseretro-precursor-predictor-v2.0.pt',
+    'elemwiseretro_temperature_predictor': 'https://github.com/VCERS/MatClaw/releases/download/v0.0.3/elemwiseretro-temperature-predictor-v2.0.pt',
+    'elemwiseretro_temperature_normalizer': 'https://github.com/VCERS/MatClaw/releases/download/v0.0.3/elemwiseretro-temperature-normalizer-v2.0.pt',
     'convnextv2_sem_classifier': 'https://github.com/VCERS/MatClaw/releases/download/v0.0.1/convnextv2_base-finetuned-sem-classifier.pth'
 }
 
@@ -137,8 +137,9 @@ def clear_cache() -> None:
     """
     cache_dir = get_cache_dir()
     if cache_dir.exists():
-        for file in cache_dir.glob('*.sav'):
-            file.unlink()
+        for ext in ['*.sav', '*.pt', '*.pth']:
+            for file in cache_dir.glob(ext):
+                file.unlink()
         print(f"Cleared cache directory: {cache_dir}")
     else:
         print(f"Cache directory does not exist: {cache_dir}")
@@ -155,13 +156,14 @@ def get_cache_info() -> dict:
     cached_files = []
     
     if cache_dir.exists():
-        for file in cache_dir.glob('*.sav'):
-            size_mb = file.stat().st_size / (1024 * 1024)
-            cached_files.append({
-                'name': file.name,
-                'path': str(file),
-                'size_mb': round(size_mb, 2)
-            })
+        for ext in ['*.sav', '*.pt', '*.pth']:
+            for file in cache_dir.glob(ext):
+                size_mb = file.stat().st_size / (1024 * 1024)
+                cached_files.append({
+                    'name': file.name,
+                    'path': str(file),
+                    'size_mb': round(size_mb, 2)
+                })
     
     return {
         'cache_dir': str(cache_dir),
