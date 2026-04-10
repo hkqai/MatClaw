@@ -6,9 +6,9 @@ Requires MP_API_KEY environment variable with your Materials Project API key.
 
 from typing import List, Dict, Any, Optional, Annotated
 from pydantic import Field
-from mp_api.client import MPRester
 import os
 import re
+import requests
 from utils.literature_utils import get_paper_metadata_from_doi
 
 
@@ -113,6 +113,14 @@ def mp_search_recipe(
             "Example: '10.1021/jacs.5b00620'"
         )
     ] = None,
+    skip: Annotated[
+        int,
+        Field(
+            default=0,
+            ge=0,
+            description="Number of results to skip (for pagination). Default: 0."
+        )
+    ] = 0,
     limit: Annotated[
         int,
         Field(
@@ -200,6 +208,7 @@ def mp_search_recipe(
         heating_time_max: Maximum heating time (hours)
         year_min: Minimum publication year
         doi: Specific publication DOI
+        skip: Number of results to skip (for pagination)
         limit: Maximum number of recipes to return (1-30)
         fields: Specific data fields to return
         format_routes: If True, converts recipes to standardized route format (uses target_formula)
@@ -282,324 +291,341 @@ def mp_search_recipe(
                 "error": "At least one search criterion must be provided (target_formula, precursor_formulas, elements, keywords, etc.)"
             }
         
-        # Initialize Materials Project API client
-        with MPRester(api_key) as mpr:
-            try:
-                if mpr.materials and hasattr(mpr.materials, 'synthesis'):
+        # Construct API request parameters
+        api_params = {}
+        
+        # target_formula: accepts single string only
+        if target_formula:
+            api_params['target_formula'] = target_formula[0] if isinstance(target_formula, list) else target_formula
+        
+        # precursor_formula: accepts single string only
+        if precursor_formulas:
+            api_params['precursor_formula'] = precursor_formulas[0] if isinstance(precursor_formulas, list) else precursor_formulas
+        
+        # keywords: for API, send as comma-separated string or multiple parameters
+        if keywords:
+            if isinstance(keywords, str):
+                api_params['keywords'] = keywords
+            else:
+                api_params['keywords'] = ','.join(keywords)
+        
+        # synthesis_type parameter
+        if synthesis_type:
+            api_params['synthesis_type'] = synthesis_type
+        
+        # Temperature parameters need condition_heating_ prefix
+        if temperature_min is not None:
+            api_params['condition_heating_temperature_min'] = temperature_min
+        
+        if temperature_max is not None:
+            api_params['condition_heating_temperature_max'] = temperature_max
+        
+        # Time parameters need condition_heating_ prefix
+        if heating_time_min is not None:
+            api_params['condition_heating_time_min'] = heating_time_min
+        
+        if heating_time_max is not None:
+            api_params['condition_heating_time_max'] = heating_time_max
+        
+        # Pagination parameters
+        api_params['_skip'] = skip
+        api_params['_limit'] = limit
+        
+        # Make direct API request
+        api_url = "https://api.materialsproject.org/materials/synthesis/"
+        headers = {
+            'accept': 'application/json',
+            'X-API-KEY': api_key
+        }
+        
+        try:
+            response = requests.get(api_url, params=api_params, headers=headers)
+            response.raise_for_status()
 
-                    search_kwargs = {}
-                    # target_formula: accepts single string only
-                    if target_formula:
-                        search_kwargs['target_formula'] = target_formula[0] if isinstance(target_formula, list) else target_formula
-                    
-                    # precursor_formula: accepts single string only
-                    if precursor_formulas:
-                        search_kwargs['precursor_formula'] = precursor_formulas[0] if isinstance(precursor_formulas, list) else precursor_formulas
-                    
-                    # keywords: accepts list[str]
-                    if keywords:
-                        if isinstance(keywords, str):
-                            search_kwargs['keywords'] = [keywords]
-                        else:
-                            search_kwargs['keywords'] = keywords
-                    
-                    # synthesis_type parameter
-                    if synthesis_type:
-                        search_kwargs['synthesis_type'] = [synthesis_type]
-                    
-                    # Temperature parameters need condition_heating_ prefix
-                    if temperature_min is not None:
-                        search_kwargs['condition_heating_temperature_min'] = temperature_min
-                    
-                    if temperature_max is not None:
-                        search_kwargs['condition_heating_temperature_max'] = temperature_max
-                    
-                    # Time parameters need condition_heating_ prefix
-                    if heating_time_min is not None:
-                        search_kwargs['condition_heating_time_min'] = heating_time_min
-                    
-                    if heating_time_max is not None:
-                        search_kwargs['condition_heating_time_max'] = heating_time_max
-                    
-                    results = mpr.materials.synthesis.search(**search_kwargs, num_chunks=limit)
-                    
-                else:
-                    return {
-                        "success": False,
-                        "query": query_params,
-                        "count": 0,
-                        "recipes": [],
-                        "error": "Synthesis recipe search is not available in the current Materials Project API version. "
-                                "This feature may require MP API v0.38.0+ or special access. "
-                                "Available endpoints: " + str([attr for attr in dir(mpr) if not attr.startswith('_')][:20]),
-                        "help": "The Materials Project Synthesis Explorer may require special API access. "
-                               "Contact Materials Project support or check https://docs.materialsproject.org/"
-                    }
-                
-                if not isinstance(results, list):
-                    results = list(results)
-                
-                # Process and format results
-                recipes = []
-                for i, result in enumerate(results[:limit]):
-                    recipe = {}
-                    
-                    # Extract standard fields
-                    if hasattr(result, 'dict'):
-                        result_dict = result.dict()
-                    elif isinstance(result, dict):
-                        result_dict = result
-                    else:
-                        result_dict = vars(result)
-                    
-                    # Map fields to standardized output
-                    recipe['recipe_id'] = result_dict.get('synthesis_id') or result_dict.get('id') or f"recipe_{i+1}"
-                    
-                    # Target information
-                    recipe['target'] = result_dict.get('target')
-                    target_obj = result_dict.get('target', {})
-                    if target_obj:
-                        recipe['target_formula'] = target_obj.get('material_formula')
-                    else:
-                        recipe['target_formula'] = None
-                    
-                    # Precursors
-                    recipe['precursors'] = result_dict.get('precursors') or []
-                    
-                    # Synthesis steps/operations
-                    recipe['operations'] = result_dict.get('operations') or []
-                    
-                    # Extract temperature and time from operations
-                    temp_celsius = None
-                    time_hours = None
-                    atmosphere = None
-                    
-                    operations = recipe['operations']
-                    if operations and isinstance(operations, list):
-                        for op in operations:
-                            if isinstance(op, dict):
-                                conditions = op.get('conditions', {})
-                                
-                                # Extract temperature from heating operations
-                                if 'heating_temperature' in conditions:
-                                    temp_list = conditions['heating_temperature']
-                                    if temp_list and isinstance(temp_list, list):
-                                        for temp_data in temp_list:
-                                            if isinstance(temp_data, dict):
-                                                temp_val = temp_data.get('min_value') or temp_data.get('max_value')
-                                                if temp_val and temp_val > (temp_celsius or 0):
-                                                    temp_celsius = temp_val
-                                
-                                # Extract heating time
-                                if 'heating_time' in conditions:
-                                    time_list = conditions['heating_time']
-                                    if time_list and isinstance(time_list, list):
-                                        for time_data in time_list:
-                                            if isinstance(time_data, dict):
-                                                time_val = time_data.get('min_value') or time_data.get('max_value')
-                                                time_unit = time_data.get('units', 'hours')
-                                                if time_val:
-                                                    # Convert to hours
-                                                    if time_unit in ['h', 'hours', 'hour']:
-                                                        time_hours = (time_hours or 0) + time_val
-                                                    elif time_unit in ['day', 'days']:
-                                                        time_hours = (time_hours or 0) + (time_val * 24)
-                                                    elif time_unit in ['min', 'minutes', 'minute']:
-                                                        time_hours = (time_hours or 0) + (time_val / 60)
-                                
-                                # Extract atmosphere
-                                if 'heating_atmosphere' in conditions:
-                                    atm_list = conditions['heating_atmosphere']
-                                    if atm_list and isinstance(atm_list, list) and len(atm_list) > 0:
-                                        atmosphere = atm_list[0]
-                    
-                    # Conditions
-                    recipe['conditions'] = {}
-                    recipe['temperature_celsius'] = temp_celsius
-                    recipe['heating_time_hours'] = time_hours
-                    recipe['atmosphere'] = atmosphere or 'not specified'
-                    
-                    # Publication information
-                    recipe['product_info'] = result_dict.get('paragraph_string')
-                    recipe['doi'] = result_dict.get('doi')
-                    recipe['citation'] = result_dict.get('citation') or result_dict.get('reference')
-                    
-                    # Extract year from DOI if not directly available
-                    year = result_dict.get('year') or result_dict.get('publication_year')
-                    if not year and recipe['doi']:
-                        # Try extracting year from DOI pattern first
-                        # Examples: 10.1016/j.matlet.2012.04.115 -> 2012
-                        year_match = re.search(r'[./\-](19\d{2}|20\d{2})(?=[./\-])', recipe['doi'])
-                        if year_match:
-                            year = int(year_match.group(1))
-                        
-                        # If pattern matching failed, try CrossRef API as fallback
-                        if not year and get_paper_metadata_from_doi is not None:
-                            try:
-                                doi_metadata = get_paper_metadata_from_doi(recipe['doi'])
-                                if doi_metadata and doi_metadata.get('year'):
-                                    year = doi_metadata['year']
-                            except Exception:
-                                # Silently fail - year will remain None
-                                pass
-                    recipe['year'] = year
-                    
-                    # Additional fields
-                    recipe['synthesis_type'] = result_dict.get('synthesis_type')
-                    
-                    if fields:
-                        recipe = {k: v for k, v in recipe.items() if k in fields or k == 'recipe_id'}
-                    
-                    recipes.append(recipe)
-                
-                # Track counts for accurate warnings
-                total_before_filtering = len(recipes)
-                
-                # Apply client-side filtering (MP API doesn't always filter correctly)
-                filtered_recipes = recipes
-
-                # Filter by year_min if specified
-                # Only filter out recipes with known years that are too old
-                # Keep recipes where year cannot be determined
-                if year_min is not None:
-                    filtered_recipes = [
-                        r for r in filtered_recipes 
-                        if r.get('year') is None or r['year'] >= year_min
-                    ]
-                
-                # Use filtered recipes
-                recipes = filtered_recipes
-                num_filtered_out = total_before_filtering - len(recipes)
-                
-                warnings = []
-                if len(results) > limit:
-                    warnings.append(f"Found {len(results)} total results in database, but limited to {limit}. Increase 'limit' parameter to see more.")
-                
-                if num_filtered_out > 0:
-                    warnings.append(f"Filtered out {num_filtered_out} recipe(s) that didn't match client-side filtering criteria (e.g., year constraints).")
-                
-                if len(recipes) == 0:
-                    if num_filtered_out > 0:
-                        warnings.append("All recipes were filtered out. Try broadening your search criteria (e.g., lower year_min).")
-                    else:
-                        warnings.append("No synthesis recipes found matching the search criteria. Try broadening your search or using different keywords.")
-                
-                # Build base result
-                base_result = {
-                    "success": True,
-                    "query": query_params,
-                    "count": len(recipes),
-                    "recipes": recipes,
-                    "warnings": warnings if warnings else None,
-                    "message": f"Found {len(recipes)} synthesis recipe(s) matching search criteria"
-                }
-                
-                # Apply route formatting if requested
-                if format_routes:
-                    # Auto-infer target_composition from target_formula
-                    if not target_formula:
-                        return {
-                            "success": False,
-                            "query": query_params,
-                            "count": len(recipes),
-                            "recipes": recipes,
-                            "error": "target_formula must be provided when format_routes=True"
-                        }
-                    
-                    # Use first formula if list, otherwise use the string
-                    target_composition = target_formula[0] if isinstance(target_formula, list) else target_formula
-                    
-                    routes = []
-                    filtered_count = 0
-                    conversion_warnings = []
-                    
-                    
-                    for idx, recipe in enumerate(recipes, 1):
-                        try:
-                            # Extract basic information
-                            temperature = recipe.get("temperature_celsius")
-                            time_hours = recipe.get("heating_time_hours")
-                            
-                            # Extract precursors
-                            precursors_data = recipe.get("precursors", [])
-                            precursors = _extract_precursors(precursors_data)
-                            
-                            # Extract synthesis steps
-                            operations = recipe.get("operations")
-                            steps = _extract_steps(operations, temperature, time_hours)
-                            
-                            # Determine synthesis method
-                            method = _infer_synthesis_method(recipe)
-                            
-                            # Calculate scores
-                            confidence = 0.90  # Literature routes have high confidence
-                            feasibility = _calculate_feasibility_score(
-                                temperature or 800,
-                                time_hours or 12,
-                                temperature_max or float('inf'),
-                                heating_time_max or float('inf')
-                            )
-                            
-                            # Build standardized route
-                            route = {
-                                "route_id": idx,
-                                "source": "literature",
-                                "method": method,
-                                "confidence": confidence,
-                                "feasibility_score": feasibility,
-                                "precursors": precursors,
-                                "steps": steps,
-                                "temperature_range": f"{temperature}°C" if temperature else "See steps",
-                                "total_time_estimate": f"~{time_hours:.1f} hours" if time_hours else "See steps",
-                                "atmosphere_required": recipe.get("atmosphere") or "not specified",
-                                "basis": "Literature-derived from Materials Project",
-                                "citation": recipe.get("citation"),
-                                "doi": recipe.get("doi"),
-                                "year": recipe.get("year"),
-                                "recipe_id": recipe.get("recipe_id")
-                            }
-                            
-                            routes.append(route)
-                            
-                        except Exception as e:
-                            conversion_warnings.append(f"Failed to convert recipe {idx}: {str(e)}")
-                            continue
-                    
-                    # Return formatted routes
-                    if not routes:
-                        return {
-                            "success": False,
-                            "target_composition": target_composition,
-                            "n_routes": 0,
-                            "routes": [],
-                            "filtered_count": filtered_count,
-                            "error": "No recipes could be converted. Check constraints or recipe format.",
-                            "warnings": conversion_warnings + (warnings or [])
-                        }
-                    
-                    return {
-                        "success": True,
-                        "target_composition": target_composition,
-                        "n_routes": len(routes),
-                        "routes": routes,
-                        "filtered_count": filtered_count,
-                        "original_count": len(recipes),
-                        "warnings": (conversion_warnings + (warnings or [])) if conversion_warnings or warnings else None,
-                        "message": f"Successfully converted {len(routes)} recipe(s) to standardized routes"
-                    }
-                
-                return base_result
-                
-            except AttributeError as e:
+            api_response = response.json()
+            
+            # Extract results from API response
+            # MP API returns: {"data": [...], "meta": {...}}
+            if isinstance(api_response, dict) and 'data' in api_response:
+                results = api_response['data']
+ 
+            else:
                 return {
                     "success": False,
                     "query": query_params,
                     "count": 0,
                     "recipes": [],
-                    "error": f"Synthesis recipe endpoint not available: {str(e)}. "
-                            "This may require MP API version 0.38.0+ or special access permissions.",
-                    "help": "Check Materials Project API documentation or contact support for synthesis data access."
+                    "error": f"Unexpected API response format: {type(api_response)}"
                 }
+            
+                
+            # Process and format results
+            recipes = []
+            for i, result in enumerate(results[:limit]):
+                recipe = {}
+                
+                # Extract standard fields
+                if hasattr(result, 'dict'):
+                    result_dict = result.dict()
+                elif isinstance(result, dict):
+                    result_dict = result
+                else:
+                    result_dict = vars(result)
+                
+                # Map fields to standardized output
+                recipe['recipe_id'] = result_dict.get('synthesis_id') or result_dict.get('id') or f"recipe_{i+1}"
+                
+                # Target information
+                recipe['target'] = result_dict.get('target')
+                target_obj = result_dict.get('target', {})
+                if target_obj:
+                    recipe['target_formula'] = target_obj.get('material_formula')
+                else:
+                    recipe['target_formula'] = None
+                
+                # Precursors
+                recipe['precursors'] = result_dict.get('precursors') or []
+                
+                # Synthesis steps/operations
+                recipe['operations'] = result_dict.get('operations') or []
+                
+                # Extract temperature and time from operations
+                temp_celsius = None
+                time_hours = None
+                atmosphere = None
+                
+                operations = recipe['operations']
+                if operations and isinstance(operations, list):
+                    for op in operations:
+                        if isinstance(op, dict):
+                            conditions = op.get('conditions', {})
+                            
+                            # Extract temperature from heating operations
+                            if 'heating_temperature' in conditions:
+                                temp_list = conditions['heating_temperature']
+                                if temp_list and isinstance(temp_list, list):
+                                    for temp_data in temp_list:
+                                        if isinstance(temp_data, dict):
+                                            temp_val = temp_data.get('min_value') or temp_data.get('max_value')
+                                            if temp_val and temp_val > (temp_celsius or 0):
+                                                temp_celsius = temp_val
+                            
+                            # Extract heating time
+                            if 'heating_time' in conditions:
+                                time_list = conditions['heating_time']
+                                if time_list and isinstance(time_list, list):
+                                    for time_data in time_list:
+                                        if isinstance(time_data, dict):
+                                            time_val = time_data.get('min_value') or time_data.get('max_value')
+                                            time_unit = time_data.get('units', 'hours')
+                                            if time_val:
+                                                # Convert to hours
+                                                if time_unit in ['h', 'hours', 'hour']:
+                                                    time_hours = (time_hours or 0) + time_val
+                                                elif time_unit in ['day', 'days']:
+                                                    time_hours = (time_hours or 0) + (time_val * 24)
+                                                elif time_unit in ['min', 'minutes', 'minute']:
+                                                    time_hours = (time_hours or 0) + (time_val / 60)
+                            
+                            # Extract atmosphere
+                            if 'heating_atmosphere' in conditions:
+                                atm_list = conditions['heating_atmosphere']
+                                if atm_list and isinstance(atm_list, list) and len(atm_list) > 0:
+                                    atmosphere = atm_list[0]
+                
+                # Conditions
+                recipe['conditions'] = {}
+                recipe['temperature_celsius'] = temp_celsius
+                recipe['heating_time_hours'] = time_hours
+                recipe['atmosphere'] = atmosphere or 'not specified'
+                
+                # Publication information
+                recipe['product_info'] = result_dict.get('paragraph_string')
+                recipe['doi'] = result_dict.get('doi')
+                recipe['citation'] = result_dict.get('citation') or result_dict.get('reference')
+                
+                # Extract year from DOI if not directly available
+                year = result_dict.get('year') or result_dict.get('publication_year')
+                if not year and recipe['doi']:
+                    # Try extracting year from DOI pattern first
+                    # Examples: 10.1016/j.matlet.2012.04.115 -> 2012
+                    year_match = re.search(r'[./\-](19\d{2}|20\d{2})(?=[./\-])', recipe['doi'])
+                    if year_match:
+                        year = int(year_match.group(1))
+                    
+                    # If pattern matching failed, try CrossRef API as fallback
+                    if not year and get_paper_metadata_from_doi is not None:
+                        try:
+                            doi_metadata = get_paper_metadata_from_doi(recipe['doi'])
+                            if doi_metadata and doi_metadata.get('year'):
+                                year = doi_metadata['year']
+                        except Exception:
+                            # Silently fail - year will remain None
+                            pass
+                recipe['year'] = year
+                
+                # Additional fields
+                recipe['synthesis_type'] = result_dict.get('synthesis_type')
+                
+                if fields:
+                    recipe = {k: v for k, v in recipe.items() if k in fields or k == 'recipe_id'}
+                
+                recipes.append(recipe)
+            
+            # Track counts for accurate warnings
+            total_before_filtering = len(recipes)
+            
+            # Apply client-side filtering
+            filtered_recipes = recipes
+
+            # Filter by year_min (only filter out recipes with known years that are too old, keep recipes where year cannot be determined)
+            if year_min is not None:
+                filtered_recipes = [
+                    r for r in filtered_recipes 
+                    if r.get('year') is None or r['year'] >= year_min
+                ]
+            
+            # Use filtered recipes
+            recipes = filtered_recipes
+            num_filtered_out = total_before_filtering - len(recipes)
+            
+            warnings = []
+            if len(results) > limit:
+                warnings.append(f"Found {len(results)} total results in database, but limited to {limit}. Increase 'limit' parameter to see more.")
+            
+            if num_filtered_out > 0:
+                warnings.append(f"Filtered out {num_filtered_out} recipe(s) that didn't match client-side filtering criteria (e.g., year constraints).")
+            
+            if len(recipes) == 0:
+                if num_filtered_out > 0:
+                    warnings.append("All recipes were filtered out. Try broadening your search criteria (e.g., lower year_min).")
+                else:
+                    warnings.append("No synthesis recipes found matching the search criteria. Try broadening your search or using different keywords.")
+            
+            # Build base result
+            base_result = {
+                "success": True,
+                "query": query_params,
+                "count": len(recipes),
+                "recipes": recipes,
+                "warnings": warnings if warnings else None,
+                "message": f"Found {len(recipes)} synthesis recipe(s) matching search criteria"
+            }
+            
+            # Apply route formatting if requested
+            if format_routes:
+                # Auto-infer target_composition from target_formula
+                if not target_formula:
+                    return {
+                        "success": False,
+                        "query": query_params,
+                        "count": len(recipes),
+                        "recipes": recipes,
+                        "error": "target_formula must be provided when format_routes=True"
+                    }
+                
+                # Use first formula if list, otherwise use the string
+                target_composition = target_formula[0] if isinstance(target_formula, list) else target_formula
+                
+                routes = []
+                filtered_count = 0
+                conversion_warnings = []
+                
+                
+                for idx, recipe in enumerate(recipes, 1):
+                    try:
+                        # Extract basic information
+                        temperature = recipe.get("temperature_celsius")
+                        time_hours = recipe.get("heating_time_hours")
+                        
+                        # Extract precursors
+                        precursors_data = recipe.get("precursors", [])
+                        precursors = _extract_precursors(precursors_data)
+                        
+                        # Extract synthesis steps
+                        operations = recipe.get("operations")
+                        steps = _extract_steps(operations, temperature, time_hours)
+                        
+                        # Determine synthesis method
+                        method = _infer_synthesis_method(recipe)
+                        
+                        # Calculate scores
+                        confidence = 0.90  # Literature routes have high confidence
+                        feasibility = _calculate_feasibility_score(
+                            temperature or 800,
+                            time_hours or 12,
+                            temperature_max or float('inf'),
+                            heating_time_max or float('inf')
+                        )
+                        
+                        # Build standardized route
+                        route = {
+                            "route_id": idx,
+                            "source": "literature",
+                            "method": method,
+                            "confidence": confidence,
+                            "feasibility_score": feasibility,
+                            "precursors": precursors,
+                            "steps": steps,
+                            "temperature_range": f"{temperature}°C" if temperature else "See steps",
+                            "total_time_estimate": f"~{time_hours:.1f} hours" if time_hours else "See steps",
+                            "atmosphere_required": recipe.get("atmosphere") or "not specified",
+                            "basis": "Literature-derived from Materials Project",
+                            "citation": recipe.get("citation"),
+                            "doi": recipe.get("doi"),
+                            "year": recipe.get("year"),
+                            "recipe_id": recipe.get("recipe_id")
+                        }
+                        
+                        routes.append(route)
+                        
+                    except Exception as e:
+                        conversion_warnings.append(f"Failed to convert recipe {idx}: {str(e)}")
+                        continue
+                
+                # Return formatted routes
+                if not routes:
+                    return {
+                        "success": False,
+                        "target_composition": target_composition,
+                        "n_routes": 0,
+                        "routes": [],
+                        "filtered_count": filtered_count,
+                        "error": "No recipes could be converted. Check constraints or recipe format.",
+                        "warnings": conversion_warnings + (warnings or [])
+                    }
+                
+                return {
+                    "success": True,
+                    "target_composition": target_composition,
+                    "n_routes": len(routes),
+                    "routes": routes,
+                    "filtered_count": filtered_count,
+                    "original_count": len(recipes),
+                    "warnings": (conversion_warnings + (warnings or [])) if conversion_warnings or warnings else None,
+                    "message": f"Successfully converted {len(routes)} recipe(s) to standardized routes"
+                }
+            
+            return base_result
+                
+        except requests.exceptions.HTTPError as e:
+            return {
+                "success": False,
+                "query": query_params,
+                "count": 0,
+                "recipes": [],
+                "error": f"API request failed: {str(e)}. Status code: {response.status_code if 'response' in locals() else 'unknown'}",
+                "help": "Check Materials Project API documentation or verify your API key."
+            }
+        except requests.exceptions.RequestException as e:
+            return {
+                "success": False,
+                "query": query_params,
+                "count": 0,
+                "recipes": [],
+                "error": f"Network error: {str(e)}",
+                "help": "Check your internet connection and Materials Project API status."
+            }
                 
     except Exception as e:
         return {
