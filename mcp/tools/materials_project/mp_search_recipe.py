@@ -8,6 +8,7 @@ from typing import List, Dict, Any, Optional, Annotated
 from pydantic import Field
 from mp_api.client import MPRester
 import os
+import re
 
 
 def mp_search_recipe(
@@ -364,55 +365,124 @@ def mp_search_recipe(
                     recipe['recipe_id'] = result_dict.get('synthesis_id') or result_dict.get('id') or f"recipe_{i+1}"
                     
                     # Target information
-                    recipe['target'] = result_dict.get('target') or result_dict.get('product')
-                    recipe['target_formula'] = result_dict.get('target_formula') or result_dict.get('formula')
+                    recipe['target'] = result_dict.get('target')
+                    target_obj = result_dict.get('target', {})
+                    if target_obj:
+                        recipe['target_formula'] = target_obj.get('material_formula')
+                    else:
+                        recipe['target_formula'] = None
                     
                     # Precursors
-                    recipe['precursors'] = result_dict.get('precursors') or result_dict.get('starting_materials') or []
+                    recipe['precursors'] = result_dict.get('precursors') or []
                     
                     # Synthesis steps/operations
-                    recipe['operations'] = result_dict.get('operations') or result_dict.get('steps') or result_dict.get('procedure')
+                    recipe['operations'] = result_dict.get('operations') or []
+                    
+                    # Extract temperature and time from operations
+                    temp_celsius = None
+                    time_hours = None
+                    atmosphere = None
+                    
+                    operations = recipe['operations']
+                    if operations and isinstance(operations, list):
+                        for op in operations:
+                            if isinstance(op, dict):
+                                conditions = op.get('conditions', {})
+                                
+                                # Extract temperature from heating operations
+                                if 'heating_temperature' in conditions:
+                                    temp_list = conditions['heating_temperature']
+                                    if temp_list and isinstance(temp_list, list):
+                                        for temp_data in temp_list:
+                                            if isinstance(temp_data, dict):
+                                                temp_val = temp_data.get('min_value') or temp_data.get('max_value')
+                                                if temp_val and temp_val > (temp_celsius or 0):
+                                                    temp_celsius = temp_val
+                                
+                                # Extract heating time
+                                if 'heating_time' in conditions:
+                                    time_list = conditions['heating_time']
+                                    if time_list and isinstance(time_list, list):
+                                        for time_data in time_list:
+                                            if isinstance(time_data, dict):
+                                                time_val = time_data.get('min_value') or time_data.get('max_value')
+                                                time_unit = time_data.get('units', 'hours')
+                                                if time_val:
+                                                    # Convert to hours
+                                                    if time_unit in ['h', 'hours', 'hour']:
+                                                        time_hours = (time_hours or 0) + time_val
+                                                    elif time_unit in ['day', 'days']:
+                                                        time_hours = (time_hours or 0) + (time_val * 24)
+                                                    elif time_unit in ['min', 'minutes', 'minute']:
+                                                        time_hours = (time_hours or 0) + (time_val / 60)
+                                
+                                # Extract atmosphere
+                                if 'heating_atmosphere' in conditions:
+                                    atm_list = conditions['heating_atmosphere']
+                                    if atm_list and isinstance(atm_list, list) and len(atm_list) > 0:
+                                        atmosphere = atm_list[0]
                     
                     # Conditions
-                    conditions = result_dict.get('conditions') or {}
-                    recipe['conditions'] = conditions
+                    recipe['conditions'] = {}
+                    recipe['temperature_celsius'] = temp_celsius
+                    recipe['heating_time_hours'] = time_hours
+                    recipe['atmosphere'] = atmosphere or 'not specified'
                     
-                    recipe['temperature_celsius'] = (
-                        conditions.get('temperature') or 
-                        result_dict.get('temperature') or
-                        result_dict.get('temp_celsius')
-                    )
-                    
-                    recipe['heating_time_hours'] = (
-                        conditions.get('heating_time') or
-                        conditions.get('time') or
-                        result_dict.get('time_hours') or
-                        result_dict.get('duration')
-                    )
-                    
-                    recipe['atmosphere'] = (
-                        conditions.get('atmosphere') or
-                        result_dict.get('atmosphere') or
-                        'not specified'
-                    )
-                    
-                    recipe['product_info'] = result_dict.get('product_characterization') or result_dict.get('notes')
+                    # Publication information
+                    recipe['product_info'] = result_dict.get('paragraph_string')
                     recipe['doi'] = result_dict.get('doi')
                     recipe['citation'] = result_dict.get('citation') or result_dict.get('reference')
-                    recipe['year'] = result_dict.get('year') or result_dict.get('publication_year')
+                    
+                    # Extract year from DOI if not directly available
+                    year = result_dict.get('year') or result_dict.get('publication_year')
+                    if not year and recipe['doi']:
+                        # Extract only full 4-digit years from DOI
+                        # Examples: 10.1016/j.matlet.2012.04.115 -> 2012
+                        year_match = re.search(r'[./\-](19\d{2}|20\d{2})(?=[./\-])', recipe['doi'])
+                        if year_match:
+                            year = int(year_match.group(1))
+                    recipe['year'] = year
                     recipe['authors'] = result_dict.get('authors')
+                    
+                    # Additional fields
+                    recipe['synthesis_type'] = result_dict.get('synthesis_type')
                     
                     if fields:
                         recipe = {k: v for k, v in recipe.items() if k in fields or k == 'recipe_id'}
                     
                     recipes.append(recipe)
                 
+                # Track counts for accurate warnings
+                total_before_filtering = len(recipes)
+                
+                # Apply client-side filtering (MP API doesn't always filter correctly)
+                filtered_recipes = recipes
+                
+                # Filter by year_min if specified
+                # Only filter out recipes with known years that are too old
+                # Keep recipes where year cannot be determined
+                if year_min is not None:
+                    filtered_recipes = [
+                        r for r in filtered_recipes 
+                        if r.get('year') is None or r['year'] >= year_min
+                    ]
+                
+                # Use filtered recipes
+                recipes = filtered_recipes
+                num_filtered_out = total_before_filtering - len(recipes)
+                
                 warnings = []
                 if len(results) > limit:
-                    warnings.append(f"Found {len(results)} recipes but returning only {limit}. Increase 'limit' parameter to see more.")
+                    warnings.append(f"Found {len(results)} total results in database, but limited to {limit}. Increase 'limit' parameter to see more.")
+                
+                if num_filtered_out > 0:
+                    warnings.append(f"Filtered out {num_filtered_out} recipe(s) that didn't match client-side filtering criteria (e.g., year constraints).")
                 
                 if len(recipes) == 0:
-                    warnings.append("No synthesis recipes found matching the search criteria. Try broadening your search or using different keywords.")
+                    if num_filtered_out > 0:
+                        warnings.append("All recipes were filtered out. Try broadening your search criteria (e.g., lower year_min).")
+                    else:
+                        warnings.append("No synthesis recipes found matching the search criteria. Try broadening your search or using different keywords.")
                 
                 # Build base result
                 base_result = {
