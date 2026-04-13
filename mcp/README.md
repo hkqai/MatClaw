@@ -198,9 +198,17 @@ python -m pytest tests/pymatgen/test_enumeration_generator.py -v
 
 | Tool | Description |
 |---|---|
-| `arrows_prepare_campaign` | Initialize ARROWS active learning campaign with thermodynamic precursor ranking |
+| `arrows_initialize_campaign` | Initialize ARROWS active learning campaign with thermodynamic precursor ranking |
 | `arrows_suggest_experiment` | Suggest next experiment using acquisition function (uncertainty, diversity, random) |
 | `arrows_record_result` | Record experimental result and update ARROWS reaction knowledge |
+
+### Bayesian Optimization
+
+| Tool | Description |
+|---|---|
+| `bo_initialize_campaign` | Initialize generic BO campaign with customizable parameter space (continuous, discrete, categorical) and objectives |
+| `bo_record_result` | Record experimental observations (any measurement types: XRD, SEM, electrochemical, etc.) |
+| `bo_suggest_experiment` | Suggest next experiments using GP model and acquisition functions (EI, UCB, PI) |
 
 ### Characterization
 

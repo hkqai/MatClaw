@@ -29,7 +29,8 @@ ase>=3.28.0
 dscribe>=2.1.2
 lxml>=6.0.2  # optional: used for pretty-printing fixed URDF XML
 trimesh>=4.11.5  # lula tool: mesh loading and voxelisation for collision sphere generation
-scipy>=1.17.1    # lula tool: Euclidean distance transform for sphere packing
+scipy>=1.17.1    # lula tool: Euclidean distance transform for sphere packing; bayesian_optimization: acquisition functions
+scikit-learn>=1.3.0  # bayesian_optimization tool: Gaussian Process models for surrogate modeling
 pymeshfix>=0.18.0  # optional, lula tool: improves mesh repair quality (falls back to trimesh)
 pyyaml>=6.0.3     # lula tool: YAML output (also transitively required by pymatgen)
 # git+https://github.com/njszym/ARROWS.git@cb630e944315c8ac19f5b9a3c9d8984be93258a6

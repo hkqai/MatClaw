@@ -53,7 +53,7 @@ from tools.elemwise_retro import (
     er_predict_temperature,
 )
 from tools.arrows import (
-    arrows_prepare_campaign,
+    arrows_initialize_campaign,
     arrows_suggest_experiment,
     arrows_record_result,
 )
@@ -136,7 +136,7 @@ mcp.tool()(er_predict_precursors)
 mcp.tool()(er_predict_temperature)
 
 # ARROWS active learning tools
-mcp.tool()(arrows_prepare_campaign)
+mcp.tool()(arrows_initialize_campaign)
 mcp.tool()(arrows_suggest_experiment)
 mcp.tool()(arrows_record_result)
 

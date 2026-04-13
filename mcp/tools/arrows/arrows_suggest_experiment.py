@@ -1,7 +1,7 @@
 """
 ARROWS experiment suggestion tool for active learning synthesis optimization.
 
-Given an existing campaign directory populated by arrows_prepare_campaign, this
+Given an existing campaign directory populated by arrows_initialize_campaign, this
 tool reads the current ARROWS state (Rxn_TD.csv, Settings.json, PairwiseRxns.csv,
 Exp.json) and returns the next experiment(s) to run.
 
@@ -18,7 +18,7 @@ Decision logic (mirrors suggest.py):
 5. If every reaction has already been sampled, report campaign_complete=True.
 
 This is the second step in the ARROWS active learning loop:
-    arrows_prepare_campaign → [arrows_suggest_experiment → robot → arrows_record_result] × N
+    arrows_initialize_campaign → [arrows_suggest_experiment → robot → arrows_record_result] × N
 
 Based on: https://github.com/njszym/ARROWS
 Publication: https://doi.org/10.1038/s41467-023-42329-9
@@ -37,7 +37,7 @@ def arrows_suggest_experiment(
         str,
         Field(
             description=(
-                "Path to the campaign directory created by arrows_prepare_campaign. "
+                "Path to the campaign directory created by arrows_initialize_campaign. "
                 "Must contain Settings.json and Rxn_TD.csv. "
                 "Exp.json and PairwiseRxns.csv are loaded automatically if present. "
                 "Example: './campaigns/Ba2YCu3O7_run1'"
@@ -152,7 +152,7 @@ def arrows_suggest_experiment(
             "success": False,
             "error": (
                 f"Settings.json not found in {campaign_dir_abs}. "
-                "Run arrows_prepare_campaign first to initialise the campaign."
+                "Run arrows_initialize_campaign first to initialise the campaign."
             )
         }
     if not os.path.isfile(rxn_td_path):
@@ -160,7 +160,7 @@ def arrows_suggest_experiment(
             "success": False,
             "error": (
                 f"Rxn_TD.csv not found in {campaign_dir_abs}. "
-                "Run arrows_prepare_campaign first to generate reaction data."
+                "Run arrows_initialize_campaign first to generate reaction data."
             )
         }
 
@@ -305,7 +305,7 @@ def arrows_suggest_experiment(
             return {
                 "success": False,
                 "campaign_dir": campaign_dir_abs,
-                "error": "Rxn_TD.csv is empty. Re-run arrows_prepare_campaign."
+                "error": "Rxn_TD.csv is empty. Re-run arrows_initialize_campaign."
             }
     except Exception as e:
         return {

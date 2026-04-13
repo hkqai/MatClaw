@@ -1,5 +1,5 @@
 """
-Tests for arrows_prepare_campaign tool.
+Tests for arrows_initialize_campaign tool.
 
 Tests are organized into three categories:
 
@@ -10,7 +10,7 @@ Tests are organized into three categories:
 
 Mocking strategy
 ----------------
-arrows_prepare_campaign performs its ARROWS imports *inside* the function body,
+arrows_initialize_campaign performs its ARROWS imports *inside* the function body,
 so we patch the live module attributes after the function has already imported
 them (arrows.energetics.get_pd_dict, etc.).  The pymatgen.core.composition import
 is also done inside the function but pymatgen is always available in this project.
@@ -27,7 +27,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tools.arrows.arrows_prepare_campaign import arrows_prepare_campaign
+from tools.arrows.arrows_initialize_campaign import arrows_initialize_campaign
 
 # ---------------------------------------------------------------------------
 # Skip markers
@@ -86,7 +86,7 @@ class TestInputValidation:
     """Validate that bad inputs are rejected before ARROWS is ever called."""
 
     def test_rejects_empty_precursors(self, tmp_path):
-        result = arrows_prepare_campaign(
+        result = arrows_initialize_campaign(
             target=MINIMAL_TARGET,
             precursors=[],
             temperatures=MINIMAL_TEMPS,
@@ -96,7 +96,7 @@ class TestInputValidation:
         assert "precursor" in result["error"].lower()
 
     def test_rejects_single_precursor(self, tmp_path):
-        result = arrows_prepare_campaign(
+        result = arrows_initialize_campaign(
             target=MINIMAL_TARGET,
             precursors=["Y2O3"],
             temperatures=MINIMAL_TEMPS,
@@ -106,7 +106,7 @@ class TestInputValidation:
         assert "precursor" in result["error"].lower()
 
     def test_rejects_empty_temperatures(self, tmp_path):
-        result = arrows_prepare_campaign(
+        result = arrows_initialize_campaign(
             target=MINIMAL_TARGET,
             precursors=MINIMAL_PRECURSORS,
             temperatures=[],
@@ -116,7 +116,7 @@ class TestInputValidation:
         assert "temperature" in result["error"].lower()
 
     def test_rejects_invalid_atmosphere(self, tmp_path):
-        result = arrows_prepare_campaign(
+        result = arrows_initialize_campaign(
             target=MINIMAL_TARGET,
             precursors=MINIMAL_PRECURSORS,
             temperatures=MINIMAL_TEMPS,
@@ -143,7 +143,7 @@ class TestArrowsNotInstalled:
             "arrows.searcher": None,
         }
         with patch.dict(sys.modules, hidden):
-            result = arrows_prepare_campaign(
+            result = arrows_initialize_campaign(
                 target=MINIMAL_TARGET,
                 precursors=MINIMAL_PRECURSORS,
                 temperatures=MINIMAL_TEMPS,
@@ -160,7 +160,7 @@ class TestArrowsNotInstalled:
         hidden = {"arrows": None, "arrows.energetics": None,
                   "arrows.reactions": None, "arrows.searcher": None}
         with patch.dict(sys.modules, hidden):
-            arrows_prepare_campaign(
+            arrows_initialize_campaign(
                 target=MINIMAL_TARGET,
                 precursors=MINIMAL_PRECURSORS,
                 temperatures=MINIMAL_TEMPS,
@@ -188,7 +188,7 @@ class TestCampaignDirectoryManagement:
         campaign_dir = tmp_path / "new_campaign"
         assert not campaign_dir.exists()
 
-        result = arrows_prepare_campaign(
+        result = arrows_initialize_campaign(
             target=MINIMAL_TARGET,
             precursors=MINIMAL_PRECURSORS,
             temperatures=MINIMAL_TEMPS,
@@ -203,7 +203,7 @@ class TestCampaignDirectoryManagement:
     @patch("arrows.reactions.get_balanced_coeffs", side_effect=_mock_get_balanced_coeffs)
     @patch("arrows.reactions.get_rxn_energy", side_effect=_mock_get_rxn_energy)
     def test_returns_absolute_campaign_dir(self, mock_erg, mock_rxn_e, mock_pc, mock_pd, tmp_path):
-        result = arrows_prepare_campaign(
+        result = arrows_initialize_campaign(
             target=MINIMAL_TARGET,
             precursors=MINIMAL_PRECURSORS,
             temperatures=MINIMAL_TEMPS,
@@ -221,7 +221,7 @@ class TestCampaignDirectoryManagement:
         """Calling twice should overwrite without error."""
         campaign_dir = str(tmp_path / "campaign")
         for _ in range(2):
-            result = arrows_prepare_campaign(
+            result = arrows_initialize_campaign(
                 target=MINIMAL_TARGET,
                 precursors=MINIMAL_PRECURSORS,
                 temperatures=MINIMAL_TEMPS,
@@ -239,7 +239,7 @@ class TestReturnStructure:
     @patch("arrows.reactions.get_balanced_coeffs", side_effect=_mock_get_balanced_coeffs)
     @patch("arrows.reactions.get_rxn_energy", side_effect=_mock_get_rxn_energy)
     def test_required_top_level_keys_present(self, mock_erg, mock_rxn_e, mock_pc, mock_pd, tmp_path):
-        result = arrows_prepare_campaign(
+        result = arrows_initialize_campaign(
             target=MINIMAL_TARGET,
             precursors=MINIMAL_PRECURSORS,
             temperatures=MINIMAL_TEMPS,
@@ -259,7 +259,7 @@ class TestReturnStructure:
     @patch("arrows.reactions.get_balanced_coeffs", side_effect=_mock_get_balanced_coeffs)
     @patch("arrows.reactions.get_rxn_energy", side_effect=_mock_get_rxn_energy)
     def test_n_reactions_matches_reactions_list(self, mock_erg, mock_rxn_e, mock_pc, mock_pd, tmp_path):
-        result = arrows_prepare_campaign(
+        result = arrows_initialize_campaign(
             target=MINIMAL_TARGET,
             precursors=MINIMAL_PRECURSORS,
             temperatures=MINIMAL_TEMPS,
@@ -273,7 +273,7 @@ class TestReturnStructure:
     @patch("arrows.reactions.get_balanced_coeffs", side_effect=_mock_get_balanced_coeffs)
     @patch("arrows.reactions.get_rxn_energy", side_effect=_mock_get_rxn_energy)
     def test_each_reaction_has_required_fields(self, mock_erg, mock_rxn_e, mock_pc, mock_pd, tmp_path):
-        result = arrows_prepare_campaign(
+        result = arrows_initialize_campaign(
             target=MINIMAL_TARGET,
             precursors=MINIMAL_PRECURSORS,
             temperatures=MINIMAL_TEMPS,
@@ -294,7 +294,7 @@ class TestReturnStructure:
     @patch("arrows.reactions.get_rxn_energy", side_effect=_mock_get_rxn_energy)
     def test_target_formula_is_normalised(self, mock_erg, mock_rxn_e, mock_pc, mock_pd, tmp_path):
         """Pymatgen reduced formula normalisation should be applied."""
-        result = arrows_prepare_campaign(
+        result = arrows_initialize_campaign(
             target="Ba2YCu3O7",               # Already reduced
             precursors=MINIMAL_PRECURSORS,
             temperatures=MINIMAL_TEMPS,
@@ -308,7 +308,7 @@ class TestReturnStructure:
     @patch("arrows.reactions.get_balanced_coeffs", side_effect=_mock_get_balanced_coeffs)
     @patch("arrows.reactions.get_rxn_energy", side_effect=_mock_get_rxn_energy)
     def test_n_precursors_available_matches_input(self, mock_erg, mock_rxn_e, mock_pc, mock_pd, tmp_path):
-        result = arrows_prepare_campaign(
+        result = arrows_initialize_campaign(
             target=MINIMAL_TARGET,
             precursors=MINIMAL_PRECURSORS,
             temperatures=MINIMAL_TEMPS,
@@ -322,7 +322,7 @@ class TestReturnStructure:
     @patch("arrows.reactions.get_balanced_coeffs", side_effect=_mock_get_balanced_coeffs)
     @patch("arrows.reactions.get_rxn_energy", side_effect=_mock_get_rxn_energy)
     def test_message_contains_target_and_count(self, mock_erg, mock_rxn_e, mock_pc, mock_pd, tmp_path):
-        result = arrows_prepare_campaign(
+        result = arrows_initialize_campaign(
             target=MINIMAL_TARGET,
             precursors=MINIMAL_PRECURSORS,
             temperatures=MINIMAL_TEMPS,
@@ -342,7 +342,7 @@ class TestReactionRanking:
     @patch("arrows.reactions.get_rxn_energy", side_effect=_mock_get_rxn_energy)
     def test_reactions_sorted_by_dG_ascending(self, mock_erg, mock_rxn_e, mock_pc, mock_pd, tmp_path):
         """Rank 1 (most favorable) should have the most negative ΔG."""
-        result = arrows_prepare_campaign(
+        result = arrows_initialize_campaign(
             target=MINIMAL_TARGET,
             precursors=MINIMAL_PRECURSORS,
             temperatures=MINIMAL_TEMPS,
@@ -357,7 +357,7 @@ class TestReactionRanking:
     @patch("arrows.reactions.get_balanced_coeffs", side_effect=_mock_get_balanced_coeffs)
     @patch("arrows.reactions.get_rxn_energy", side_effect=_mock_get_rxn_energy)
     def test_ranks_are_sequential_from_one(self, mock_erg, mock_rxn_e, mock_pc, mock_pd, tmp_path):
-        result = arrows_prepare_campaign(
+        result = arrows_initialize_campaign(
             target=MINIMAL_TARGET,
             precursors=MINIMAL_PRECURSORS,
             temperatures=MINIMAL_TEMPS,
@@ -378,7 +378,7 @@ class TestOutputFiles:
     @patch("arrows.reactions.get_rxn_energy", side_effect=_mock_get_rxn_energy)
     def test_rxn_td_csv_created(self, mock_erg, mock_rxn_e, mock_pc, mock_pd, tmp_path):
         campaign_dir = str(tmp_path / "campaign")
-        result = arrows_prepare_campaign(
+        result = arrows_initialize_campaign(
             target=MINIMAL_TARGET,
             precursors=MINIMAL_PRECURSORS,
             temperatures=MINIMAL_TEMPS,
@@ -393,7 +393,7 @@ class TestOutputFiles:
     @patch("arrows.reactions.get_rxn_energy", side_effect=_mock_get_rxn_energy)
     def test_rxn_td_csv_header_and_row_count(self, mock_erg, mock_rxn_e, mock_pc, mock_pd, tmp_path):
         campaign_dir = str(tmp_path / "campaign")
-        result = arrows_prepare_campaign(
+        result = arrows_initialize_campaign(
             target=MINIMAL_TARGET,
             precursors=MINIMAL_PRECURSORS,
             temperatures=MINIMAL_TEMPS,
@@ -414,7 +414,7 @@ class TestOutputFiles:
     def test_rxn_td_csv_sorted_by_energy(self, mock_erg, mock_rxn_e, mock_pc, mock_pd, tmp_path):
         """Rows in CSV should be sorted most favorable first (most negative ΔG)."""
         campaign_dir = str(tmp_path / "campaign")
-        result = arrows_prepare_campaign(
+        result = arrows_initialize_campaign(
             target=MINIMAL_TARGET,
             precursors=MINIMAL_PRECURSORS,
             temperatures=MINIMAL_TEMPS,
@@ -433,7 +433,7 @@ class TestOutputFiles:
     @patch("arrows.reactions.get_rxn_energy", side_effect=_mock_get_rxn_energy)
     def test_settings_json_created(self, mock_erg, mock_rxn_e, mock_pc, mock_pd, tmp_path):
         campaign_dir = str(tmp_path / "campaign")
-        result = arrows_prepare_campaign(
+        result = arrows_initialize_campaign(
             target=MINIMAL_TARGET,
             precursors=MINIMAL_PRECURSORS,
             temperatures=MINIMAL_TEMPS,
@@ -448,7 +448,7 @@ class TestOutputFiles:
     @patch("arrows.reactions.get_rxn_energy", side_effect=_mock_get_rxn_energy)
     def test_settings_json_content(self, mock_erg, mock_rxn_e, mock_pc, mock_pd, tmp_path):
         campaign_dir = str(tmp_path / "campaign")
-        result = arrows_prepare_campaign(
+        result = arrows_initialize_campaign(
             target=MINIMAL_TARGET,
             precursors=MINIMAL_PRECURSORS,
             temperatures=MINIMAL_TEMPS,
@@ -476,7 +476,7 @@ class TestOutputFiles:
     @patch("arrows.reactions.get_rxn_energy", side_effect=_mock_get_rxn_energy)
     def test_settings_json_stores_max_precursors(self, mock_erg, mock_rxn_e, mock_pc, mock_pd, tmp_path):
         campaign_dir = str(tmp_path / "campaign")
-        result = arrows_prepare_campaign(
+        result = arrows_initialize_campaign(
             target=MINIMAL_TARGET,
             precursors=MINIMAL_PRECURSORS,
             temperatures=MINIMAL_TEMPS,
@@ -497,7 +497,7 @@ class TestOutputFiles:
         self, mock_erg, mock_rxn_e, mock_pc, mock_pd, tmp_path
     ):
         campaign_dir = str(tmp_path / "campaign")
-        result = arrows_prepare_campaign(
+        result = arrows_initialize_campaign(
             target=MINIMAL_TARGET,
             precursors=MINIMAL_PRECURSORS,
             temperatures=MINIMAL_TEMPS,
@@ -522,7 +522,7 @@ class TestDefaultParameters:
         self, mock_erg, mock_rxn_e, mock_pc, mock_pd, tmp_path
     ):
         """When allow_oxidation=True, get_pd_dict should receive O2 and CO2."""
-        arrows_prepare_campaign(
+        arrows_initialize_campaign(
             target=MINIMAL_TARGET,
             precursors=MINIMAL_PRECURSORS,
             temperatures=MINIMAL_TEMPS,
@@ -541,7 +541,7 @@ class TestDefaultParameters:
         self, mock_erg, mock_rxn_e, mock_pc, mock_pd, tmp_path
     ):
         """When allow_oxidation=False, O2 must NOT be in get_pd_dict call."""
-        arrows_prepare_campaign(
+        arrows_initialize_campaign(
             target=MINIMAL_TARGET,
             precursors=MINIMAL_PRECURSORS,
             temperatures=MINIMAL_TEMPS,
@@ -560,7 +560,7 @@ class TestDefaultParameters:
     ):
         """Default byproducts should be ['O2', 'CO2'] when allow_oxidation=True."""
         campaign_dir = str(tmp_path / "campaign")
-        arrows_prepare_campaign(
+        arrows_initialize_campaign(
             target=MINIMAL_TARGET,
             precursors=MINIMAL_PRECURSORS,
             temperatures=MINIMAL_TEMPS,
@@ -581,7 +581,7 @@ class TestDefaultParameters:
     ):
         """Default byproducts should be ['CO2'] only when allow_oxidation=False."""
         campaign_dir = str(tmp_path / "campaign")
-        arrows_prepare_campaign(
+        arrows_initialize_campaign(
             target=MINIMAL_TARGET,
             precursors=MINIMAL_PRECURSORS,
             temperatures=MINIMAL_TEMPS,
@@ -602,7 +602,7 @@ class TestDefaultParameters:
     ):
         """Explicit allowed_byproducts should bypass auto-defaults."""
         campaign_dir = str(tmp_path / "campaign")
-        arrows_prepare_campaign(
+        arrows_initialize_campaign(
             target=MINIMAL_TARGET,
             precursors=MINIMAL_PRECURSORS,
             temperatures=MINIMAL_TEMPS,
@@ -621,7 +621,7 @@ class TestDefaultParameters:
         self, mock_erg, mock_rxn_e, mock_pc, mock_pd, tmp_path
     ):
         campaign_dir = str(tmp_path / "campaign")
-        arrows_prepare_campaign(
+        arrows_initialize_campaign(
             target=MINIMAL_TARGET,
             precursors=MINIMAL_PRECURSORS,
             temperatures=MINIMAL_TEMPS,
@@ -639,7 +639,7 @@ class TestErrorHandlingDuringExecution:
 
     @patch("arrows.energetics.get_pd_dict", side_effect=RuntimeError("MP API error"))
     def test_phase_diagram_failure_returns_error(self, mock_pd, tmp_path):
-        result = arrows_prepare_campaign(
+        result = arrows_initialize_campaign(
             target=MINIMAL_TARGET,
             precursors=MINIMAL_PRECURSORS,
             temperatures=MINIMAL_TEMPS,
@@ -651,7 +651,7 @@ class TestErrorHandlingDuringExecution:
     @patch("arrows.energetics.get_pd_dict", side_effect=_mock_pd_dict)
     @patch("arrows.searcher.get_precursor_sets", return_value=[])
     def test_no_balanced_sets_returns_error(self, mock_pc, mock_pd, tmp_path):
-        result = arrows_prepare_campaign(
+        result = arrows_initialize_campaign(
             target=MINIMAL_TARGET,
             precursors=MINIMAL_PRECURSORS,
             temperatures=MINIMAL_TEMPS,
@@ -669,7 +669,7 @@ class TestErrorHandlingDuringExecution:
         self, mock_erg, mock_rxn_e, mock_pc, mock_pd, tmp_path
     ):
         """If every reaction fails energy evaluation, tool returns failure."""
-        result = arrows_prepare_campaign(
+        result = arrows_initialize_campaign(
             target=MINIMAL_TARGET,
             precursors=MINIMAL_PRECURSORS,
             temperatures=MINIMAL_TEMPS,
@@ -684,7 +684,7 @@ class TestErrorHandlingDuringExecution:
     def test_partial_failure_adds_warning(self, mock_erg, mock_rxn_e, mock_pc, mock_pd, tmp_path):
         """If some (not all) reactions fail energy evaluation, result is still success
         but a warning is added."""
-        result = arrows_prepare_campaign(
+        result = arrows_initialize_campaign(
             target=MINIMAL_TARGET,
             precursors=MINIMAL_PRECURSORS,
             temperatures=MINIMAL_TEMPS,
@@ -720,7 +720,7 @@ class TestIntegration:
 
     def test_successful_campaign_for_simple_binary(self, tmp_path):
         """Full round-trip: phase diagram → enumeration → ranking → file output."""
-        result = arrows_prepare_campaign(
+        result = arrows_initialize_campaign(
             target="BaTiO3",
             precursors=["BaO", "TiO2"],
             temperatures=[800, 900],
@@ -734,7 +734,7 @@ class TestIntegration:
 
     def test_rxn_td_csv_written_and_parsable(self, tmp_path):
         """Rxn_TD.csv produced by a real campaign must be readable by ARROWS suggest.py."""
-        result = arrows_prepare_campaign(
+        result = arrows_initialize_campaign(
             target="BaTiO3",
             precursors=["BaO", "TiO2"],
             temperatures=[800, 900],
@@ -757,7 +757,7 @@ class TestIntegration:
 
     def test_settings_json_loadable_by_arrows(self, tmp_path):
         """Settings.json must satisfy ARROWS' expected key structure."""
-        result = arrows_prepare_campaign(
+        result = arrows_initialize_campaign(
             target="BaTiO3",
             precursors=["BaO", "TiO2"],
             temperatures=[800, 900],
@@ -779,7 +779,7 @@ class TestIntegration:
 
     def test_reactions_are_thermodynamically_favorable(self, tmp_path):
         """For a well-known system all returned reactions should have ΔG < 0."""
-        result = arrows_prepare_campaign(
+        result = arrows_initialize_campaign(
             target="BaTiO3",
             precursors=["BaO", "TiO2"],
             temperatures=[800, 900],
@@ -795,7 +795,7 @@ class TestIntegration:
 
     def test_no_warnings_on_clean_run(self, tmp_path):
         """A well-formed campaign with valid inputs should produce no warnings."""
-        result = arrows_prepare_campaign(
+        result = arrows_initialize_campaign(
             target="BaTiO3",
             precursors=["BaO", "TiO2"],
             temperatures=[800, 900],
