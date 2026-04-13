@@ -152,8 +152,6 @@ python -m pytest tests/pymatgen/test_enumeration_generator.py -v
 | `pymatgen_ion_exchange_generator` | Generate ion-exchanged variants with charge balancing |
 | `pymatgen_perturbation_generator` | Randomly perturb atomic positions and lattice |
 | `pymatgen_enumeration_generator` | Enumerate ordered supercell decorations of disordered structures |
-| `predict_molecule_binding` | Predict molecule-target binding label with fixed fine-tuned LLM prompt (1 active / 0 inactive) |
-| `predict_molecule_synthesizability` | Predict molecule synthesizability label with fixed fine-tuned LLM prompt (1 yes / 0 no / 2 unknown) |
 | `pymatgen_defect_generator` | Generate point defect supercells (vacancies, substitutions, interstitials) |
 | `pymatgen_sqs_generator` | Generate special quasirandom structures (SQS) for alloy modeling |
 
@@ -195,6 +193,49 @@ python -m pytest tests/pymatgen/test_enumeration_generator.py -v
 | `structure_analyzer` | Extract structure-based ML features (coordination, packing, RDF) |
 | `stability_analyzer` | Analyze thermodynamic stability (formation energy, hull distance) |
 | `structure_fingerprinter` | Generate structural fingerprints (SOAP, MBTR, Sine/Coulomb matrices) |
+
+### Active Learning
+
+| Tool | Description |
+|---|---|
+| `arrows_prepare_campaign` | Initialize ARROWS active learning campaign with thermodynamic precursor ranking |
+| `arrows_suggest_experiment` | Suggest next experiment using acquisition function (uncertainty, diversity, random) |
+| `arrows_record_result` | Record experimental result and update ARROWS reaction knowledge |
+
+### Characterization
+
+| Tool | Description |
+|---|---|
+| `xrd_analyze_pattern` | Automated XRD phase identification using autoXRD deep learning model |
+
+### ChemLLM
+
+| Tool | Description |
+|---|---|
+| `predict_molecule_binding` | Predict molecule-target binding label with fine-tuned LLM (1 active / 0 inactive) |
+| `predict_molecule_synthesizability` | Predict molecule synthesizability with fine-tuned LLM (1 yes / 0 no / 2 unknown) |
+
+### Element-wise Retrosynthesis
+
+| Tool | Description |
+|---|---|
+| `er_predict_precursors` | Predict optimal synthesis precursors for inorganic materials |
+| `er_predict_temperature` | Predict synthesis temperature given target and precursor set |
+
+### Image Retrieval
+
+| Tool | Description |
+|---|---|
+| `paper_image_extract` | Extract figures and images from scientific papers (PDF) |
+| `image_segmentation` | Segment images into regions using ML models |
+| `sem_image_classification` | Classify SEM images by morphology or composition |
+
+### ORCA (Quantum Chemistry)
+
+| Tool | Description |
+|---|---|
+| `orca_analysis_tools` | Parse and summarize ORCA output files (energies, HOMO/LUMO, frequencies) |
+| `orca_cube_tools` | Generate molecular orbital, electron density, and ESP cube files from ORCA calculations |
 
 ### Selection & Ranking
 
