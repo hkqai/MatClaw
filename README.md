@@ -44,7 +44,7 @@ MatClaw follows a layered architecture:
 | **ML Prediction** | Machine learning predictions for structure relaxation, band gap, and formation energy (`ml_relax_structure`, `ml_predict_bandgap`, `ml_predict_eform`) |
 | **Selection** | Multi-objective ranking (Pareto, weighted sum, constraint-based) (`multi_objective_ranker`) |
 | **Synthesis Planning** | Recipe quantification and template-based route generation (`synthesis_recipe_quantifier`, `template_route_generator`) |
-| **Active Learning** | ARROWS campaign management for synthesis optimization (`arrows_prepare_campaign`, `arrows_suggest_experiment`, `arrows_record_result`) |
+| **ARROWS** | ARROWS campaign management for synthesis optimization (`arrows_prepare_campaign`, `arrows_suggest_experiment`, `arrows_record_result`) |
 | **Characterization** | Automated phase identification from powder diffraction patterns using deep learning (`xrd_analyze_pattern`) |
 | **ChemLLM** | Molecule binding and synthesizability prediction using fine-tuned LLMs (`predict_molecule_binding`, `predict_molecule_synthesizability`) |
 | **Element-wise Retrosynthesis** | Precursor and temperature prediction for inorganic synthesis (`er_predict_precursors`, `er_predict_temperature`) |

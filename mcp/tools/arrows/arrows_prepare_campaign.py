@@ -20,7 +20,7 @@ from pydantic import Field
 import os
 import json
 import csv
-from tools.active_learning._arrows_utils import arrows_cwd
+from tools.arrows._arrows_utils import arrows_cwd
 
 
 def arrows_prepare_campaign(

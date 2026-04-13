@@ -22,7 +22,7 @@ from typing import Dict, Any, List, Optional, Annotated
 from pydantic import Field
 import os
 import json
-from tools.active_learning._arrows_utils import arrows_cwd
+from tools.arrows._arrows_utils import arrows_cwd
 
 
 def arrows_record_result(

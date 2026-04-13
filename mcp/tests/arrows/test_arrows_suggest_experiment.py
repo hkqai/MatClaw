@@ -27,7 +27,7 @@ from unittest.mock import MagicMock, call, patch
 
 import pytest
 
-from tools.active_learning.arrows_suggest_experiment import arrows_suggest_experiment
+from tools.arrows.arrows_suggest_experiment import arrows_suggest_experiment
 
 # ---------------------------------------------------------------------------
 # Skip markers
@@ -661,7 +661,7 @@ class TestIntegration:
 
     def test_first_suggestion_for_batio3_campaign(self, tmp_path):
         """Full round-trip: prepare campaign then suggest first experiment."""
-        from tools.active_learning.arrows_prepare_campaign import arrows_prepare_campaign
+        from tools.arrows.arrows_prepare_campaign import arrows_prepare_campaign
 
         camp_dir = str(tmp_path / "batio3_campaign")
 
@@ -683,7 +683,7 @@ class TestIntegration:
 
     def test_suggestion_precursors_are_from_pool(self, tmp_path):
         """Suggested precursors must come from the predefined pool."""
-        from tools.active_learning.arrows_prepare_campaign import arrows_prepare_campaign
+        from tools.arrows.arrows_prepare_campaign import arrows_prepare_campaign
 
         precursor_pool = ["BaO", "TiO2"]
         camp_dir = str(tmp_path / "batio3_campaign_pool")
@@ -707,7 +707,7 @@ class TestIntegration:
 
     def test_batch_of_two_gives_two_distinct_suggestions(self, tmp_path):
         """batch_size=2 should return 2 distinct precursor-set/temperature combos."""
-        from tools.active_learning.arrows_prepare_campaign import arrows_prepare_campaign
+        from tools.arrows.arrows_prepare_campaign import arrows_prepare_campaign
 
         camp_dir = str(tmp_path / "batio3_campaign_batch")
         prep = arrows_prepare_campaign(

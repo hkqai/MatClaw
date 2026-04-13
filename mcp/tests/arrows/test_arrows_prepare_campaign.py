@@ -27,7 +27,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tools.active_learning.arrows_prepare_campaign import arrows_prepare_campaign
+from tools.arrows.arrows_prepare_campaign import arrows_prepare_campaign
 
 # ---------------------------------------------------------------------------
 # Skip markers

@@ -194,7 +194,7 @@ python -m pytest tests/pymatgen/test_enumeration_generator.py -v
 | `stability_analyzer` | Analyze thermodynamic stability (formation energy, hull distance) |
 | `structure_fingerprinter` | Generate structural fingerprints (SOAP, MBTR, Sine/Coulomb matrices) |
 
-### Active Learning
+### ARROWS
 
 | Tool | Description |
 |---|---|
