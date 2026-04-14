@@ -12,7 +12,7 @@ weight fractions) from a robot synthesis run, this tool:
 5. Saves the updated PairwiseRxns.csv back to disk.
 
 This is the third step in the ARROWS active learning loop:
-    arrows_prepare_campaign → [arrows_suggest_experiment → robot → arrows_record_result] x N
+    arrows_initialize_campaign → [arrows_suggest_experiment → robot → arrows_record_result] x N
 
 Based on: https://github.com/njszym/ARROWS
 Publication: https://doi.org/10.1038/s41467-023-42329-9
@@ -22,7 +22,7 @@ from typing import Dict, Any, List, Optional, Annotated
 from pydantic import Field
 import os
 import json
-from tools.active_learning._arrows_utils import arrows_cwd
+from tools.arrows._arrows_utils import arrows_cwd
 
 
 def arrows_record_result(
@@ -30,7 +30,7 @@ def arrows_record_result(
         str,
         Field(
             description=(
-                "Path to the campaign directory created by arrows_prepare_campaign. "
+                "Path to the campaign directory created by arrows_initialize_campaign. "
                 "Must contain Settings.json. Exp.json will be created or updated. "
                 "PairwiseRxns.csv will be created or updated. "
                 "Example: './campaigns/BaTiO3_run1'"
@@ -105,7 +105,7 @@ def arrows_record_result(
             "success": False,
             "campaign_dir": campaign_dir_abs,
             "error": f"Settings.json not found in {campaign_dir_abs}. "
-                     "Run arrows_prepare_campaign first.",
+                     "Run arrows_initialize_campaign first.",
             "warnings": warnings,
         }
 

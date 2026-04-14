@@ -1,28 +1,130 @@
 ---
 name: active-learning
-description: Autonomous synthesis optimization using ARROWS active learning with automated XRD characterization. Orchestrates the complete loop from campaign setup through iterative experimentation to convergence.
+description: Autonomous optimization using ARROWS (thermodynamically-guided synthesis) or Bayesian Optimization (generic process optimization). Orchestrates closed-loop experimentation from campaign setup through iterative learning to convergence.
 ---
 
-# Active Learning Skill (ARROWS + XRD)
+# Active Learning Skill
 
-This skill orchestrates autonomous synthesis optimization using the ARROWS (Autonomous Rapid Reconfigurable Optimization Workshop for Synthesis) framework, enhanced with automated XRD phase identification.
+This skill orchestrates autonomous optimization for materials discovery and process optimization using two complementary approaches:
+
+1. **ARROWS** — Domain-specific synthesis optimization using thermodynamic guidance and pairwise reaction learning
+2. **Bayesian Optimization** — Generic optimization framework for any multi-parameter process
 
 **Complete autonomous loop:**
-1. **Campaign setup** → Plan thermodynamically-guided experiments
-2. **Suggest experiments** → Intelligently sample reaction space
-3. **Characterize products** → Automated XRD phase identification
-4. **Record results** → Update pairwise reaction knowledge
-5. **Iterate** → Repeat until target synthesized or space explored
+1. **Campaign setup** → Define parameter space and objectives
+2. **Suggest experiments** → Intelligently sample parameter space
+3. **Execute & characterize** → Run experiments and collect measurements
+4. **Record results** → Update surrogate model or knowledge base
+5. **Iterate** → Repeat until objective achieved or space explored
 
-**Key advantage:** Closes the experimental → computational feedback loop with automated characterization, enabling truly autonomous materials optimization.
+**Key advantage:** Closes the experimental → computational feedback loop with automated decision-making, enabling truly autonomous materials optimization.
+
+---
+
+## When to Use ARROWS vs Bayesian Optimization
+
+### Use ARROWS When:
+✅ **Optimizing solid-state synthesis routes** (ceramic, oxide, chalcogenide materials)  
+✅ **Target phase is known** (e.g., "synthesize high-purity BaTiO₃")  
+✅ **Precursors are well-defined chemicals** (oxides, carbonates, hydroxides, etc.)  
+✅ **Thermodynamic data is available** (Materials Project has entries for target and precursors)  
+✅ **XRD characterization** is your primary measurement technique  
+✅ **You want to learn generalizable chemistry knowledge** (pairwise reaction rules)
+
+**ARROWS strengths:**
+- Leverages thermodynamic driving force to guide search
+- Learns transferable reaction knowledge across experiments
+- Efficient for high-dimensional synthesis spaces (many precursors)
+- Automatically enumerates balanced chemical reactions
+- Integrates with automated XRD phase identification
+
+**ARROWS limitations:**
+- Specific to equilibrium synthesis (solid-state reactions)
+- Requires Materials Project thermodynamic data
+- Limited to categorical precursor selection + discrete temperatures
+- Less effective for non-equilibrium or kinetically-controlled processes
+
+---
+
+### Use Bayesian Optimization When:
+✅ **Optimizing any continuous or mixed parameter space** (temperature, pressure, concentration, time, etc.)  
+✅ **Goal is to maximize/minimize a measured property** (yield, purity, conductivity, bandgap, etc.)  
+✅ **No thermodynamic guidance available** (novel chemistries, non-equilibrium processes)  
+✅ **Parameters are numerical or have unknown relationships**  
+✅ **You have diverse characterization techniques** (XRD, SEM, electrochemistry, spectroscopy, etc.)  
+✅ **Process optimization** rather than phase discovery (e.g., optimize thin film deposition, maximize battery performance)
+
+**BO strengths:**
+- Works with any parameter types (continuous, discrete, categorical)
+- No domain knowledge required (model-free learning)
+- Handles noisy measurements robustly
+- Efficient for expensive experiments (surrogate modeling)
+- Supports any objective metric (not limited to phase purity)
+- Flexible measurement integration (any characterization technique)
+
+**BO limitations:**
+- Doesn't learn transferable chemistry knowledge
+- Requires sufficient observations to build good surrogate model (typically 5-10 per parameter)
+- Less interpretable than physics-guided ARROWS
+- No automatic chemical reaction balancing
+
+---
+
+### Decision Matrix
+
+| Scenario | Recommended Approach | Rationale |
+|----------|---------------------|-----------|
+| Synthesize high-purity LiCoO₂ from Li₂CO₃, CoO, Co₃O₄ | **ARROWS** | Known target phase, precursor selection, thermodynamic guidance available |
+| Optimize thin film deposition temperature, pressure, and deposition rate | **Bayesian Optimization** | Continuous parameters, process optimization, no thermodynamic model |
+| Discover new ternary oxide in Li-Mn-O system | **ARROWS** | Systematic phase space exploration, thermodynamic ranking, XRD characterization |
+| Maximize conductivity of doped material (varying dopant type and concentration) | **Bayesian Optimization** | Property optimization, mixed categorical/continuous parameters |
+| Find synthesis route for computationally-predicted phase | **ARROWS** | Target structure known, classical synthesis routes, equilibrium assumption valid |
+| Optimize battery electrolyte composition (solvent ratios, salt concentration, additives) | **Bayesian Optimization** | High-dimensional continuous space, performance metric (not phase purity) |
+| Screen 100+ precursor combinations for target perovskite | **ARROWS** | Large combinatorial space, thermodynamic pre-ranking efficient |
+| Tune annealing profile (heating rate, hold time, cooling rate) | **Bayesian Optimization** | Continuous process parameters, kinetic effects important |
+
+---
+
+## Hybrid Strategies
+
+For complex optimization problems, consider combining both approaches:
+
+**Strategy 1: ARROWS → BO Refinement**
+```
+1. Use ARROWS to find conditions that synthesize target phase
+2. Switch to BO to optimize continuous parameters around success:
+   - Fine-tune temperature (continuous rather than discrete)
+   - Optimize heating/cooling rates
+   - Optimize precursor ratios (continuous)
+   - Maximize purity or other properties
+```
+
+**Strategy 2: BO → ARROWS Validation**
+```
+1. Use BO for initial exploration of novel parameter space
+2. Once promising chemistries identified, use ARROWS to:
+   - Systematically explore precursor variations
+   - Learn transferable reaction knowledge
+   - Build robust synthesis protocols
+```
+
+**Strategy 3: Parallel Campaigns**
+```
+Run both simultaneously:
+- ARROWS optimizes precursor selection + discrete temperatures
+- BO optimizes continuous processing parameters (ramp rates, hold times, atmosphere)
+- Combine insights from both to find global optimum
+```
 
 ---
 
 ## Tool Catalogue
 
-### Campaign Preparation Tools
+### ARROWS Tools (Thermodynamically-Guided Synthesis)
 
-#### `arrows_prepare_campaign` — Initialize Active Learning Campaign
+#### Campaign Preparation Tools
+
+##### `arrows_initialize_campaign` — Initialize Active Learning Campaign
 Sets up ARROWS campaign directory with thermodynamic data and ranked precursor sets.
 
 **Key parameters:**
@@ -54,13 +156,13 @@ Sets up ARROWS campaign directory with thermodynamic data and ranked precursor s
 
 ---
 
-### Experiment Loop Tools
+#### Experiment Loop Tools
 
-#### `arrows_suggest_experiment` — Get Next Experiment
+##### `arrows_suggest_experiment` — Get Next Experiment
 Suggests the next experiment(s) based on thermodynamic favorability and learned pairwise reactions.
 
 **Key parameters:**
-- `campaign_dir`: Path to campaign initialized by `arrows_prepare_campaign`
+- `campaign_dir`: Path to campaign initialized by `arrows_initialize_campaign`
 - `batch_size`: Number of parallel experiments to suggest (1-50, default 1)
 - `explore`: If `True`, prioritize information gain over thermodynamics (default `False`)
 - `enforce_thermo`: If `True`, only use thermodynamically favorable pairwise reactions (default `False`)
@@ -90,7 +192,7 @@ Suggests the next experiment(s) based on thermodynamic favorability and learned 
 
 ---
 
-#### `xrd_analyze_pattern` — Automated Phase Identification
+##### `xrd_analyze_pattern` — Automated Phase Identification
 Analyzes experimental XRD pattern using CNN-based phase identification with automated Rietveld refinement.
 
 **Key parameters:**
@@ -120,7 +222,7 @@ Analyzes experimental XRD pattern using CNN-based phase identification with auto
 
 ---
 
-#### `arrows_record_result` — Record Experimental Outcome
+##### `arrows_record_result` — Record Experimental Outcome
 Updates campaign with experimental result, extracting pairwise reaction knowledge.
 
 **Key parameters:**
@@ -148,7 +250,7 @@ Updates campaign with experimental result, extracting pairwise reaction knowledg
 
 ---
 
-### Results Analysis Tools
+#### Results Analysis Tools
 
 Tools for analyzing campaign outcomes and visualizing learned knowledge.
 
@@ -156,13 +258,247 @@ Tools for analyzing campaign outcomes and visualizing learned knowledge.
 
 ---
 
-## MANDATORY Active Learning Workflow
+### Bayesian Optimization Tools (Generic Process Optimization)
+
+#### Campaign Setup Tools
+
+##### `bo_initialize_campaign` — Initialize Bayesian Optimization Campaign
+Sets up BO campaign directory with parameter space definition and optimization objectives.
+
+**Key parameters:**
+- `campaign_dir`: Working directory for campaign state files
+- `parameter_space`: List of parameter definitions (continuous, discrete, categorical)
+- `objective_config`: Optimization objective (single or multi-objective)
+- `n_initial_random`: Number of random samples before GP modeling (default 5)
+- `campaign_name`: Optional descriptive name
+- `metadata`: Optional experiment metadata
+
+**Parameter space format:**
+```python
+parameter_space = [
+    {
+        "name": "temperature",
+        "type": "continuous",
+        "bounds": [400, 1200],
+        "unit": "C"
+    },
+    {
+        "name": "pressure",
+        "type": "continuous",
+        "bounds": [0.1, 10],
+        "unit": "atm",
+        "log_scale": True  # Optional: search in log space
+    },
+    {
+        "name": "precursor",
+        "type": "categorical",
+        "choices": ["Li2CO3", "LiOH", "Li2O"]
+    },
+    {
+        "name": "stirring_speed",
+        "type": "discrete",
+        "values": [100, 200, 500, 1000],
+        "unit": "rpm"
+    }
+]
+```
+
+**Objective configuration:**
+```python
+# Single objective (maximize or minimize)
+objective_config = {
+    "type": "single_objective",
+    "metrics": ["phase_purity"],  # or ["yield"], ["conductivity"], etc.
+    "direction": "maximize"  # or "minimize"
+}
+
+# Multi-objective (future support)
+objective_config = {
+    "type": "multi_objective",
+    "metrics": ["purity", "cost"],
+    "directions": ["maximize", "minimize"],
+    "scalarization": "weighted_sum",
+    "weights": [0.7, 0.3]
+}
+```
+
+**Returns:**
+```python
+{
+  "success": True,
+  "campaign_dir": "./bo_campaigns/process_opt_001",
+  "campaign_name": "Thin film deposition optimization",
+  "n_parameters": 4,
+  "n_initial_random": 5,
+  "initial_suggestions": [
+    {"temperature": 750, "pressure": 2.3, "precursor": "LiOH", "stirring_speed": 500},
+    # ... 4 more random suggestions
+  ],
+  "state_file": "./bo_campaigns/process_opt_001/bo_state.json",
+  "observations_file": "./bo_campaigns/process_opt_001/bo_observations.json"
+}
+```
+
+**What it does:**
+- Validates parameter space and objective configuration
+- Initializes campaign state (status: "initial_sampling")
+- Generates initial random suggestions for exploration
+- Creates campaign directory and state files
+
+---
+
+#### Experiment Loop Tools
+
+##### `bo_record_observation` — Record Experimental Observation
+Updates campaign with experimental result and associated measurements.
+
+**Key parameters:**
+- `campaign_dir`: Campaign directory
+- `parameters`: Dictionary of parameter values used (must match parameter space)
+- `observations`: Dictionary of measured metrics
+- `observation_id`: Optional unique identifier
+- `metadata`: Optional experiment metadata (timestamp, operator, notes, file paths, etc.)
+
+**Example:**
+```python
+bo_record_observation(
+    campaign_dir="./bo_campaigns/process_opt_001",
+    parameters={
+        "temperature": 800.0,
+        "pressure": 1.0,
+        "precursor": "Li2CO3",
+        "stirring_speed": 500
+    },
+    observations={
+        "phase_purity": 0.85,
+        "grain_size_nm": 45.2,
+        "synthesis_time_min": 120
+    },
+    observation_id="exp_023",
+    metadata={
+        "xrd_file": "/data/xrd/exp_023.xy",
+        "operator": "robot_arm_1",
+        "timestamp": "2026-04-13T14:23:00"
+    }
+)
+```
+
+**Returns:**
+```python
+{
+  "success": True,
+  "observation_id": "exp_023",
+  "n_observations": 8,
+  "objective_value": 0.85,
+  "initial_phase": True,  # Still in random sampling phase
+  "initial_phase_complete": False,
+  "best_observed_value": 0.92,
+  "files_updated": ["bo_state.json", "bo_observations.json"]
+}
+```
+
+**What it does:**
+- Validates parameters against campaign parameter space
+- Validates that required objective metrics are present
+- Appends observation to campaign database
+- Updates campaign state (observation count, best value, status)
+- Transitions from "initial_sampling" to "optimizing" after n_initial_random observations
+
+---
+
+##### `bo_suggest_experiment` — Generate Next Experiment Suggestions
+Suggests next experiment(s) using Gaussian Process surrogate model and acquisition function.
+
+**Key parameters:**
+- `campaign_dir`: Campaign directory
+- `batch_size`: Number of experiments to suggest (default 1)
+- `acquisition_function`: Strategy for selecting next experiments
+  - `"ei"` (Expected Improvement) — Balance exploration/exploitation (default)
+  - `"ucb"` (Upper Confidence Bound) — Configurable exploration
+  - `"pi"` (Probability of Improvement) — Conservative optimization
+  - `"random"` — Pure exploration (ignore model)
+- `exploration_weight`: Control exploration vs exploitation
+  - For EI/PI: xi parameter (default 0.01, larger = more exploration)
+  - For UCB: beta parameter (default 2.0, larger = more exploration)
+- `n_candidates`: Number of candidate points to evaluate (default 10000)
+- `random_seed`: Random seed for reproducibility
+
+**Returns during initial phase (random sampling):**
+```python
+{
+  "success": True,
+  "using_gp_model": False,
+  "n_suggestions": 1,
+  "suggestions": [
+    {"temperature": 650, "pressure": 5.2, "precursor": "Li2O", "stirring_speed": 200}
+  ],
+  "n_observations": 3,
+  "initial_phase": True,
+  "acquisition_function": "random",
+  "rationale": "Initial random exploration (3/5 complete)"
+}
+```
+
+**Returns during optimization phase (GP-guided):**
+```python
+{
+  "success": True,
+  "using_gp_model": True,
+  "n_suggestions": 2,
+  "suggestions": [
+    {"temperature": 815, "pressure": 1.2, "precursor": "LiOH", "stirring_speed": 500},
+    {"temperature": 780, "pressure": 0.8, "precursor": "Li2CO3", "stirring_speed": 1000}
+  ],
+  "n_observations": 12,
+  "best_observed_value": 0.94,
+  "best_parameters": {"temperature": 800, "pressure": 1.0, ...},
+  "gp_model_score": 0.87,  # R² score of GP fit
+  "acquisition_function": "ei",
+  "exploration_weight": 0.01,
+  "warnings": []
+}
+```
+
+**What it does:**
+- **Initial phase**: Samples random points for exploration (first n_initial_random observations)
+- **Optimization phase**: Builds Gaussian Process surrogate model from observations
+- Evaluates acquisition function across candidate points
+- Selects batch of experiments with highest acquisition values
+- For batch suggestions, uses greedy sequential selection to promote diversity
+
+---
+
+#### Results Analysis Tools
+
+Tools for analyzing BO campaign outcomes.
+
+*(To be added: convergence plots, parameter importance, model diagnostics)*
+
+---
+
+## MANDATORY Active Learning Workflows
+
+### Choosing Your Workflow
+
+**Use ARROWS workflow if:**
+- Optimizing solid-state synthesis
+- Target phase known, thermodynamic data available
+- Primary characterization is XRD
+
+**Use Bayesian Optimization workflow if:**
+- Generic process optimization
+- Continuous/mixed parameter space
+- Any measurement modality
+
+---
+
+## ARROWS Workflow (Thermodynamically-Guided Synthesis)
 
 ### WORKFLOW SUMMARY FOR LLMs
 
 **Standard ARROWS loop (manual XRD analysis):**
 ```
-1. arrows_prepare_campaign → campaign initialized
+1. arrows_initialize_campaign → campaign initialized
 2. arrows_suggest_experiment → (precursors, temp)
 3. [Robot synthesis]
 4. [User analyzes XRD manually] → phases, weights
@@ -172,7 +508,7 @@ Tools for analyzing campaign outcomes and visualizing learned knowledge.
 
 **Enhanced loop (automated XRD):**
 ```
-1. arrows_prepare_campaign → campaign initialized
+1. arrows_initialize_campaign → campaign initialized
 2. arrows_suggest_experiment → (precursors, temp)
 3. [Robot synthesis]
 4. xrd_analyze_pattern → phases, weights
@@ -210,7 +546,7 @@ IF temperatures is None:
 
 **Step 0.2:** Call campaign preparation
 ```
-CALL arrows_prepare_campaign(
+CALL arrows_initialize_campaign(
     target=target,
     precursors=precursors,
     temperatures=temperatures,
@@ -448,6 +784,365 @@ IF user_wants_export:
 
 ---
 
+## Bayesian Optimization Workflow (Generic Process Optimization)
+
+### WORKFLOW SUMMARY FOR LLMs
+
+**Standard BO loop:**
+```
+1. bo_initialize_campaign → campaign initialized, initial random suggestions
+2. bo_suggest_experiment → parameters to try
+3. [Execute experiment with suggested parameters]
+4. [Measure objective metric(s)]
+5. bo_record_observation → update surrogate model
+6. Repeat 2-5 until objective achieved or budget exhausted
+```
+
+**Key difference from ARROWS:** BO is measurement-agnostic. You define what to measure and optimize - could be XRD purity, conductivity, yield, cost, or any quantifiable metric.
+
+---
+
+### PHASE 0: CAMPAIGN INITIALIZATION
+
+**Input:** User wants to optimize a process or material property
+
+**Step 0.1:** Extract campaign parameters from user request
+```
+SET objective = extract_optimization_goal(user_request)
+# Examples:
+#   - "maximize phase purity"
+#   - "minimize synthesis time"
+#   - "maximize conductivity"
+#   - "optimize yield while minimizing cost"
+
+SET parameters = extract_tunable_parameters(user_request)
+# Examples:
+#   - Continuous: temperature (400-1200°C), pressure (0.1-10 atm)
+#   - Discrete: annealing time (30, 60, 120, 240 min)
+#   - Categorical: precursor choice, atmosphere, substrate
+
+SET campaign_dir = generate_campaign_dir_name(objective)
+
+# Validate and format parameter space
+FOR each parameter:
+    IF type is continuous:
+        REQUIRE bounds [min, max]
+        OPTIONAL log_scale flag (for exponential ranges)
+    ELSE IF type is discrete:
+        REQUIRE list of allowed values
+    ELSE IF type is categorical:
+        REQUIRE list of choices
+```
+
+**Step 0.2:** Define parameter space
+```
+SET parameter_space = []
+
+FOR each tunable parameter:
+    CREATE parameter definition:
+    {
+        "name": parameter_name,
+        "type": parameter_type,  # "continuous", "discrete", "categorical"
+        "bounds": [min, max]  # for continuous
+        OR "values": [v1, v2, ...]  # for discrete
+        OR "choices": [c1, c2, ...]  # for categorical
+        "unit": unit_string  # optional
+    }
+    APPEND to parameter_space
+```
+
+**Step 0.3:** Define objective configuration
+```
+SET objective_config = {
+    "type": "single_objective",  # multi-objective support coming
+    "metrics": [primary_metric_name],  # e.g., ["phase_purity"], ["yield"]
+    "direction": "maximize" OR "minimize"
+}
+
+# For multi-objective (future):
+# "metrics": ["purity", "cost"],
+# "directions": ["maximize", "minimize"],
+# "scalarization": "weighted_sum",
+# "weights": [0.7, 0.3]
+```
+
+**Step 0.4:** Call campaign initialization
+```
+CALL bo_initialize_campaign(
+    campaign_dir=campaign_dir,
+    parameter_space=parameter_space,
+    objective_config=objective_config,
+    n_initial_random=5,  # Good default: 5-10 random samples per parameter
+    campaign_name=descriptive_name,
+    metadata={
+        "project": project_name,
+        "operator": user_name,
+        "start_date": current_date
+    }
+)
+
+STORE result in campaign_result
+
+IF NOT campaign_result.success:
+    REPORT error to user
+    STOP
+```
+
+**Step 0.5:** Report campaign scope
+```
+REPORT to user:
+  - Objective: {direction} {metrics}
+  - Parameters: {list parameter names and ranges}
+  - Initial random samples: {n_initial_random}
+  - Campaign directory: {campaign_dir}
+  - Status: "Ready for initial exploration"
+
+REPORT initial suggestions:
+  "Please run these {n_initial_random} experiments first (random sampling):"
+  FOR each suggestion:
+      DISPLAY parameters
+```
+
+**Proceed to PHASE 1**
+
+---
+
+### PHASE 1: ITERATIVE OPTIMIZATION
+
+**This phase repeats until objective achieved, budget exhausted, or user stops.**
+
+**Step 1.1:** Get next experiment suggestion(s)
+```
+# Determine batch size
+IF user_can_parallelize:
+    SET batch_size = user_parallel_capacity  # e.g., 4 parallel reactors
+ELSE:
+    SET batch_size = 1
+
+# Choose acquisition function
+IF early in campaign (< 10 observations):
+    SET acquisition_function = "random"  # Pure exploration
+    SET rationale = "Initial random sampling for GP model training"
+ELSE IF moderate data (10-50 observations):
+    SET acquisition_function = "ei"  # Expected Improvement (balanced)
+    SET exploration_weight = 0.01  # Standard value
+    SET rationale = "GP-guided optimization using Expected Improvement"
+ELSE:
+    # Many observations - can try different strategies
+    IF user_wants_exploration:
+        SET acquisition_function = "ucb"  # Upper Confidence Bound
+        SET exploration_weight = 3.0  # High beta for exploration
+        SET rationale = "Exploring uncertain regions"
+    ELSE:
+        SET acquisition_function = "ei"  # Stick with EI
+        SET exploration_weight = 0.01
+        SET rationale = "Exploiting learned model"
+
+CALL bo_suggest_experiment(
+    campaign_dir=campaign_dir,
+    batch_size=batch_size,
+    acquisition_function=acquisition_function,
+    exploration_weight=exploration_weight,
+    random_seed=None  # Set for reproducibility if needed
+)
+
+STORE result in suggestion
+
+IF NOT suggestion.success:
+    REPORT error
+    STOP
+```
+
+**Step 1.2:** Communicate experiment to user/robot
+```
+FOR each experiment in suggestion.suggestions:
+    REPORT to user:
+      - Parameter values: {parameters}
+      - Acquisition strategy: {acquisition_function}
+      - Model status: {using_gp_model ? "GP-guided" : "Random exploration"}
+      
+    IF using_gp_model:
+        REPORT additional context:
+          - Current best: {best_observed_value} at {best_parameters}
+          - GP model quality: R² = {gp_model_score}
+      
+    IF robot_available:
+        DISPATCH_TO_ROBOT(experiment)
+        WAIT for execution completion
+    ELSE:
+        ASK user to execute experiment manually
+        WAIT for user confirmation
+```
+
+**Step 1.3:** Collect measurements
+```
+# User executes experiment and collects data
+ASK user: "What measurements did you collect?"
+
+# BO is flexible - accept any measurements
+SET observations = {}
+
+FOR each measured metric:
+    ASK user for metric_name and metric_value
+    observations[metric_name] = metric_value
+
+# Validate that objective metric(s) are present
+FOR each required_metric in objective_config.metrics:
+    IF required_metric NOT IN observations:
+        WARN user: "Missing required objective metric: {required_metric}"
+        ASK user to provide value
+        observations[required_metric] = user_input
+
+# Optional metadata
+OFFER to attach metadata:
+  - File paths (XRD, SEM, raw data, etc.)
+  - Timestamps
+  - Operator notes
+  - Experimental conditions not in parameter space
+
+IF user_provides_metadata:
+    SET metadata = user_metadata
+ELSE:
+    SET metadata = None
+```
+
+**Step 1.4:** Record observation
+```
+CALL bo_record_observation(
+    campaign_dir=campaign_dir,
+    parameters=experiment.parameters,  # From suggestion
+    observations=observations,
+    observation_id=generate_id(experiment_number),
+    metadata=metadata
+)
+
+STORE result in record_result
+
+IF NOT record_result.success:
+    REPORT error
+    ASK user for correction
+    RETRY
+
+IF record_result.success:
+    REPORT to user:
+      - Observation recorded: {observation_id}
+      - Objective value: {objective_value}
+      - Total observations: {n_observations}
+      - Current best: {best_observed_value}
+      
+    IF record_result.initial_phase_complete:
+        REPORT: "✓ Initial exploration complete. 
+                 Switching to GP-guided optimization."
+```
+
+**Step 1.5:** Check convergence
+```
+# Check if objective achieved
+SET current_best = record_result.best_observed_value
+SET improvement = current_best - previous_best
+
+IF objective achieved according to user criteria:
+    REPORT: "🎯 OBJECTIVE ACHIEVED!
+             Best value: {current_best}
+             Optimal parameters: {best_parameters}"
+    
+    ASK user: "Continue optimizing or stop?"
+    IF user_wants_stop:
+        GOTO PHASE 2 (Analysis)
+
+# Check for convergence (no improvement)
+IF last N observations show no improvement:
+    WARN user: "No improvement in last {N} experiments.
+                Possible reasons:
+                1. Near optimum (success!)
+                2. Poor GP model fit
+                3. Need more exploration
+                
+                Suggestions:
+                1. Stop and analyze results
+                2. Switch to exploration (UCB with high beta)
+                3. Increase batch size for diversity"
+    
+    ASK user: "Continue, switch strategy, or stop?"
+    IF user_wants_stop:
+        GOTO PHASE 2
+
+# Check budget constraints
+IF observations >= max_budget:
+    REPORT: "Budget exhausted ({max_budget} experiments).
+             Best result: {current_best} at {best_parameters}"
+    GOTO PHASE 2
+
+# Otherwise, continue loop
+GOTO Step 1.1 (next iteration)
+```
+
+---
+
+### PHASE 2: RESULTS ANALYSIS
+
+**Once campaign completes or user stops:**
+
+**Step 2.1:** Load and summarize data
+```
+LOAD campaign state from bo_state.json
+LOAD all observations from bo_observations.json
+
+ANALYZE:
+  - Total experiments: {count}
+  - Objective achieved: {yes/no}
+  - Best observed value: {max/min value}
+  - Optimal parameters: {parameter values at optimum}
+  - Improvement over initial: {best - initial_mean}
+
+REPORT summary to user
+```
+
+**Step 2.2:** Model diagnostics
+```
+IF campaign used GP model:
+    REPORT model quality:
+      - Final R² score: {gp_score}
+      - Cross-validation score: (if available)
+      - Prediction uncertainty at optimum: {sigma at best point}
+    
+    IF gp_score < 0.5:
+        WARN: "Poor model fit - results may not be reliable.
+               Possible issues:
+               1. Insufficient data
+               2. High noise in measurements
+               3. Complex parameter interactions
+               Recommendation: Perform validation experiments"
+```
+
+**Step 2.3:** Parameter importance (future)
+```
+# To be added: Sensitivity analysis
+# Which parameters have strongest effect on objective?
+```
+
+**Step 2.4:** Export and recommendations
+```
+OFFER to export:
+  - Campaign summary (JSON)
+  - Observations database (CSV)
+  - Optimal protocol (parameters + expected performance)
+  - Convergence plots (objective vs iteration)
+
+RECOMMEND next steps:
+  IF objective achieved:
+    - Validate optimal conditions with replicate experiments
+    - Explore robustness (sensitivity to parameter variations)
+    - Document final protocol
+    
+  ELSE:
+    - Analyze parameter trends
+    - Consider different parameter ranges
+    - Check for experimental errors or bias
+```
+
+---
+
 ## Common Patterns
 
 ### Pattern 1: Standard ARROWS Optimization Loop
@@ -456,7 +1151,7 @@ IF user_wants_export:
 
 ```python
 # Phase 0: Initialize
-campaign = arrows_prepare_campaign(
+campaign = arrows_initialize_campaign(
     target="BaTiO3",
     precursors=["BaO", "BaCO3", "TiO2"],
     temperatures=[700, 800, 900],
@@ -521,7 +1216,7 @@ print(f"Campaign complete. Review {campaign_dir}/Exp.json for results.")
 **Use case:** Robot can run multiple syntheses in parallel
 
 ```python
-campaign = arrows_prepare_campaign(...)
+campaign = arrows_initialize_campaign(...)
 
 while True:
     # Request 5 parallel experiments
@@ -563,10 +1258,274 @@ while True:
 
 ---
 
+### Pattern 3: Bayesian Optimization for Continuous Parameters
+
+**Use case:** Optimize deposition process with continuous temperature and pressure
+
+```python
+# Initialize campaign with continuous parameters
+campaign = bo_initialize_campaign(
+    campaign_dir="./bo_campaigns/deposition_opt",
+    parameter_space=[
+        {
+            "name": "temperature",
+            "type": "continuous",
+            "bounds": [400, 1000],
+            "unit": "C"
+        },
+        {
+            "name": "pressure",
+            "type": "continuous",
+            "bounds": [0.01, 10],
+            "unit": "torr",
+            "log_scale": True  # Exponential range
+        },
+        {
+            "name": "deposition_time",
+            "type": "continuous",
+            "bounds": [5, 120],
+            "unit": "min"
+        }
+    ],
+    objective_config={
+        "type": "single_objective",
+        "metrics": ["film_quality"],
+        "direction": "maximize"
+    },
+    n_initial_random=10,  # 3-4x number of parameters
+    campaign_name="Thin film deposition optimization"
+)
+
+# Run initial random experiments
+for i in range(campaign['n_initial_random']):
+    suggestion = bo_suggest_experiment(
+        campaign_dir="./bo_campaigns/deposition_opt"
+    )
+    
+    params = suggestion['suggestions'][0]
+    
+    # Execute deposition
+    film = deposition_system.run(
+        temperature=params['temperature'],
+        pressure=params['pressure'],
+        time=params['deposition_time']
+    )
+    
+    # Measure quality (XRD, SEM, electrical, etc.)
+    quality_score = characterize_film(film)
+    
+    # Record result
+    bo_record_observation(
+        campaign_dir="./bo_campaigns/deposition_opt",
+        parameters=params,
+        observations={"film_quality": quality_score},
+        metadata={"film_id": f"film_{i:03d}"}
+    )
+
+# GP-guided optimization
+while True:
+    suggestion = bo_suggest_experiment(
+        campaign_dir="./bo_campaigns/deposition_opt",
+        acquisition_function="ei"
+    )
+    
+    if suggestion['n_observations'] >= 50:  # Budget limit
+        break
+    
+    params = suggestion['suggestions'][0]
+    film = deposition_system.run(**params)
+    quality = characterize_film(film)
+    
+    result = bo_record_observation(
+        campaign_dir="./bo_campaigns/deposition_opt",
+        parameters=params,
+        observations={"film_quality": quality}
+    )
+    
+    # Check if goal achieved
+    if result['best_observed_value'] > 0.95:  # 95% quality threshold
+        print(f"✓ Target quality achieved!")
+        print(f"Optimal conditions: {suggestion['best_parameters']}")
+        break
+```
+
+---
+
+### Pattern 4: Mixed Parameter Types with Bayesian Optimization
+
+**Use case:** Optimize synthesis with both categorical and continuous parameters
+
+```python
+campaign = bo_initialize_campaign(
+    campaign_dir="./bo_campaigns/battery_opt",
+    parameter_space=[
+        {
+            "name": "cathode_material",
+            "type": "categorical",
+            "choices": ["LiCoO2", "LiMn2O4", "LiFePO4", "NMC111", "NMC811"]
+        },
+        {
+            "name": "electrolyte_concentration",
+            "type": "continuous",
+            "bounds": [0.5, 2.0],
+            "unit": "M"
+        },
+        {
+            "name": "cycling_temperature",
+            "type": "discrete",
+            "values": [25, 40, 55, 70],
+            "unit": "C"
+        },
+        {
+            "name": "additive",
+            "type": "categorical",
+            "choices": ["none", "VC", "FEC", "LiBOB"]
+        }
+    ],
+    objective_config={
+        "type": "single_objective",
+        "metrics": ["capacity_retention"],
+        "direction": "maximize"
+    },
+    n_initial_random=16  # 4× number of parameters
+)
+
+# Optimization loop
+for iteration in range(100):
+    suggestion = bo_suggest_experiment(
+        campaign_dir="./bo_campaigns/battery_opt",
+        acquisition_function="ei" if iteration >= 16 else "random"
+    )
+    
+    params = suggestion['suggestions'][0]
+    
+    # Build and test battery cell
+    cell = assemble_cell(
+        cathode=params['cathode_material'],
+        electrolyte_conc=params['electrolyte_concentration'],
+        additive=params['additive']
+    )
+    
+    capacity_retention = cycle_cell(
+        cell,
+        temperature=params['cycling_temperature'],
+        cycles=100
+    )
+    
+    bo_record_observation(
+        campaign_dir="./bo_campaigns/battery_opt",
+        parameters=params,
+        observations={
+            "capacity_retention": capacity_retention,
+            "initial_capacity": cell.capacity_mAh,  # Track additional metrics
+            "impedance": cell.impedance_ohm
+        }
+    )
+```
+
+---
+
+### Pattern 5: Hybrid ARROWS → BO Refinement
+
+**Use case:** Find synthesis route with ARROWS, then optimize with BO
+
+```python
+# Phase 1: Use ARROWS to find working synthesis route
+arrows_campaign = arrows_initialize_campaign(
+    target="BaTiO3",
+    precursors=["BaO", "BaCO3", "TiO2"],
+    temperatures=[700, 800, 900, 1000],
+    campaign_dir="./campaigns/BaTiO3_discovery"
+)
+
+# Run ARROWS until target synthesized
+# ... (ARROWS loop as in Pattern 1) ...
+# Result: Target forms at 800°C using BaCO3 + TiO2
+
+# Phase 2: Use BO to optimize around successful conditions
+bo_campaign = bo_initialize_campaign(
+    campaign_dir="./bo_campaigns/BaTiO3_refinement",
+    parameter_space=[
+        {
+            "name": "temperature",
+            "type": "continuous",
+            "bounds": [750, 850],  # Narrow range around 800°C
+            "unit": "C"
+        },
+        {
+            "name": "heating_rate",
+            "type": "continuous",
+            "bounds": [1, 20],
+            "unit": "C/min"
+        },
+        {
+            "name": "hold_time",
+            "type": "continuous",
+            "bounds": [0.5, 12],
+            "unit": "hours"
+        },
+        {
+            "name": "BaCO3_excess",
+            "type": "continuous",
+            "bounds": [0.9, 1.1],  # Stoichiometry ratio
+            "unit": "equiv"
+        }
+    ],
+    objective_config={
+        "type": "single_objective",
+        "metrics": ["BaTiO3_purity"],
+        "direction": "maximize"
+    },
+    n_initial_random=8
+)
+
+# Optimization loop
+for iteration in range(50):
+    suggestion = bo_suggest_experiment(
+        campaign_dir="./bo_campaigns/BaTiO3_refinement",
+        acquisition_function="ei"
+    )
+    
+    params = suggestion['suggestions'][0]
+    
+    # Synthesize with optimized conditions
+    product_xrd_file = synthesize(
+        precursors={"BaCO3": params['BaCO3_excess'], "TiO2": 1.0},
+        profile={
+            "ramp_rate": params['heating_rate'],
+            "hold_temp": params['temperature'],
+            "hold_time": params['hold_time']
+        }
+    )
+    
+    # Analyze purity
+    xrd_result = xrd_analyze_pattern(
+        spectrum_path=product_xrd_file,
+        model_path="./models/Ba-Ti-O/Models/"
+    )
+    
+    purity = xrd_result['weight_fractions'][
+        xrd_result['phases'].index("BaTiO3_99")
+    ] if "BaTiO3_99" in xrd_result['phases'] else 0.0
+    
+    bo_record_observation(
+        campaign_dir="./bo_campaigns/BaTiO3_refinement",
+        parameters=params,
+        observations={"BaTiO3_purity": purity}
+    )
+    
+    if purity > 0.98:
+        print(f"✓ High purity achieved: {purity*100:.1f}%")
+        break
+```
+
+---
+
 ## Critical Decision Points
 
 ### DECISION 1: When to Use Exploration vs Exploitation
 
+**For ARROWS:**
 ```
 IF early in campaign (< 20% experiments done):
     # Exploit thermodynamics - find best conditions quickly
@@ -581,6 +1540,28 @@ ELSE IF target synthesized at low purity:
     # Stay in exploit mode - refine around successful conditions
     SET explore = False
     # Could manually add constraints to search near success
+```
+
+**For Bayesian Optimization:**
+```
+IF n_observations < n_initial_random:
+    # Still in initial random phase
+    SET acquisition_function = "random"
+    
+ELSE IF n_observations < 3 × n_parameters:
+    # Limited data - balanced approach
+    SET acquisition_function = "ei"
+    SET exploration_weight = 0.01  # Standard value
+    
+ELSE IF converging (no recent improvement):
+    # Explore more to escape local optimum
+    SET acquisition_function = "ucb"
+    SET exploration_weight = 3.0  # High exploration
+    
+ELSE:
+    # Sufficient data - exploit learned model
+    SET acquisition_function = "ei"
+    SET exploration_weight = 0.001  # Low exploration
 ```
 
 ---
@@ -601,7 +1582,35 @@ RECOMMEND option 2 for early-campaign low-stakes experiments
 
 ---
 
-### DECISION 3: XRD Model Selection
+### DECISION 3: Choosing Initial Random Samples for BO
+
+```
+SET n_parameters = len(parameter_space)
+
+# General rule: 3-5× number of parameters
+IF parameter_space is simple (mostly continuous):
+    SET n_initial_random = 3 × n_parameters
+    
+ELSE IF parameter_space has many categorical parameters:
+    SET n_initial_random = 5 × n_parameters
+    # Categorical variables need more samples to cover combinations
+    
+ELSE IF measurements are very expensive:
+    SET n_initial_random = max(5, 2 × n_parameters)
+    # Minimum viable for GP, but accept lower model quality
+    
+ELSE IF measurements are cheap:
+    SET n_initial_random = 10 × n_parameters
+    # Oversampling gives better GP model
+
+# Sanity bounds
+SET n_initial_random = max(5, min(n_initial_random, 50))
+```
+
+---
+
+### DECISION 4: XRD Model Selection
+
 
 ```
 SET target_elements = extract_elements(target)
@@ -649,7 +1658,7 @@ ARROWS optimizes *existing* syntheses. Use `synthesis-planner` to bootstrap:
 ```
 1. synthesis-planner → literature route for target
 2. Extract precursors and temperatures from route
-3. arrows_prepare_campaign using those as starting point
+3. arrows_initialize_campaign using those as starting point
 4. ARROWS refines/optimizes from there
 ```
 

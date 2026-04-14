@@ -9,7 +9,7 @@ Prepares a new ARROWS active learning campaign by:
 5. Persisting campaign state (Rxn_TD.csv, Settings.json) to a campaign directory
 
 This is the first step in the ARROWS active learning loop:
-    arrows_prepare_campaign → [arrows_suggest_experiment → robot → arrows_record_result] × N
+    arrows_initialize_campaign → [arrows_suggest_experiment → robot → arrows_record_result] × N
 
 Based on: https://github.com/njszym/ARROWS
 Publication: https://doi.org/10.1038/s41467-023-42329-9
@@ -20,10 +20,10 @@ from pydantic import Field
 import os
 import json
 import csv
-from tools.active_learning._arrows_utils import arrows_cwd
+from tools.arrows._arrows_utils import arrows_cwd
 
 
-def arrows_prepare_campaign(
+def arrows_initialize_campaign(
     target: Annotated[
         str,
         Field(

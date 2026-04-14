@@ -27,7 +27,7 @@ from unittest.mock import MagicMock, call, patch
 
 import pytest
 
-from tools.active_learning.arrows_suggest_experiment import arrows_suggest_experiment
+from tools.arrows.arrows_suggest_experiment import arrows_suggest_experiment
 
 # ---------------------------------------------------------------------------
 # Skip markers
@@ -655,18 +655,18 @@ class TestIntegration:
     Run with:
         pytest -m integration
 
-    Requires a campaign previously created by arrows_prepare_campaign.
+    Requires a campaign previously created by arrows_initialize_campaign.
     We use BaTiO3 (clean binary BaO + TiO2 → BaTiO3) to minimise API cost.
     """
 
     def test_first_suggestion_for_batio3_campaign(self, tmp_path):
         """Full round-trip: prepare campaign then suggest first experiment."""
-        from tools.active_learning.arrows_prepare_campaign import arrows_prepare_campaign
+        from tools.arrows.arrows_initialize_campaign import arrows_initialize_campaign
 
         camp_dir = str(tmp_path / "batio3_campaign")
 
         # Prepare campaign first
-        prep = arrows_prepare_campaign(
+        prep = arrows_initialize_campaign(
             target="BaTiO3",
             precursors=["BaO", "TiO2"],
             temperatures=[800, 900],
@@ -683,12 +683,12 @@ class TestIntegration:
 
     def test_suggestion_precursors_are_from_pool(self, tmp_path):
         """Suggested precursors must come from the predefined pool."""
-        from tools.active_learning.arrows_prepare_campaign import arrows_prepare_campaign
+        from tools.arrows.arrows_initialize_campaign import arrows_initialize_campaign
 
         precursor_pool = ["BaO", "TiO2"]
         camp_dir = str(tmp_path / "batio3_campaign_pool")
 
-        prep = arrows_prepare_campaign(
+        prep = arrows_initialize_campaign(
             target="BaTiO3",
             precursors=precursor_pool,
             temperatures=[800, 900],
@@ -707,10 +707,10 @@ class TestIntegration:
 
     def test_batch_of_two_gives_two_distinct_suggestions(self, tmp_path):
         """batch_size=2 should return 2 distinct precursor-set/temperature combos."""
-        from tools.active_learning.arrows_prepare_campaign import arrows_prepare_campaign
+        from tools.arrows.arrows_initialize_campaign import arrows_initialize_campaign
 
         camp_dir = str(tmp_path / "batio3_campaign_batch")
-        prep = arrows_prepare_campaign(
+        prep = arrows_initialize_campaign(
             target="BaTiO3",
             precursors=["BaO", "TiO2"],
             temperatures=[800, 900],

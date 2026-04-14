@@ -384,7 +384,7 @@ def test_arrows_workflow_integration():
     4. Reference CIFs matching the trained model
     
     Full loop:
-    1. arrows_prepare_campaign(...) → campaign setup
+    1. arrows_initialize_campaign(...) → campaign setup
     2. arrows_suggest_experiment(...) → (precursors, temp)
     3. [simulated synthesis with known products]
     4. xrd_analyze_pattern(...) → (phases, weight_fractions)

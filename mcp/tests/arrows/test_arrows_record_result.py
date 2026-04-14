@@ -25,7 +25,7 @@ from unittest.mock import MagicMock, patch, call
 
 import pytest
 
-from tools.active_learning.arrows_record_result import arrows_record_result
+from tools.arrows.arrows_record_result import arrows_record_result
 
 # ---------------------------------------------------------------------------
 # Skip markers
@@ -948,14 +948,14 @@ class TestIntegration:
         After recording a result, arrows_suggest_experiment must recognise
         that experiment as sampled and not suggest it again.
         """
-        from tools.active_learning.arrows_prepare_campaign import arrows_prepare_campaign
-        from tools.active_learning.arrows_suggest_experiment import arrows_suggest_experiment
+        from tools.arrows.arrows_initialize_campaign import arrows_initialize_campaign
+        from tools.arrows.arrows_suggest_experiment import arrows_suggest_experiment
 
         campaign = tmp_path / "batio3_campaign_rt"
         campaign_str = str(campaign)
 
         # Prepare
-        prep = arrows_prepare_campaign(
+        prep = arrows_initialize_campaign(
             target="BaTiO3",
             precursors=["BaO", "TiO2"],
             temperatures=[800, 900],

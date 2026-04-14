@@ -28,6 +28,7 @@ from tools.ase import (
 from tools.pymatgen import (
     pymatgen_prototype_builder,
     pymatgen_substitution_generator,
+    pymatgen_substitution_predictor,
     pymatgen_ion_exchange_generator,
     pymatgen_perturbation_generator,
     pymatgen_enumeration_generator,
@@ -52,8 +53,8 @@ from tools.elemwise_retro import (
     er_predict_precursors,
     er_predict_temperature,
 )
-from tools.active_learning import (
-    arrows_prepare_campaign,
+from tools.arrows import (
+    arrows_initialize_campaign,
     arrows_suggest_experiment,
     arrows_record_result,
 )
@@ -79,6 +80,9 @@ from tools.lula import (
 from tools.chem_llm import (
     predict_molecule_binding,
     predict_molecule_synthesizability,
+)
+from tools.composition_generation import (
+    composition_enumerator,
 )
 
 # Set up logging
@@ -111,6 +115,7 @@ mcp.tool()(ase_list_databases)
 # Pymatgen structure generation tools
 mcp.tool()(pymatgen_prototype_builder)
 mcp.tool()(pymatgen_substitution_generator)
+mcp.tool()(pymatgen_substitution_predictor)
 mcp.tool()(pymatgen_ion_exchange_generator)
 mcp.tool()(pymatgen_perturbation_generator)
 mcp.tool()(pymatgen_enumeration_generator)
@@ -135,8 +140,8 @@ mcp.tool()(synthesis_recipe_quantifier)
 mcp.tool()(er_predict_precursors)
 mcp.tool()(er_predict_temperature)
 
-# Active learning tools (ARROWS)
-mcp.tool()(arrows_prepare_campaign)
+# ARROWS active learning tools
+mcp.tool()(arrows_initialize_campaign)
 mcp.tool()(arrows_suggest_experiment)
 mcp.tool()(arrows_record_result)
 
@@ -159,6 +164,9 @@ mcp.tool()(lula_generate_robot_description)
 # Fine-tuned chemistry LLM tools
 mcp.tool()(predict_molecule_binding)
 mcp.tool()(predict_molecule_synthesizability)
+
+# Composition generation tools
+mcp.tool()(composition_enumerator)
 
 
 if __name__ == "__main__":
