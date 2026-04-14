@@ -81,6 +81,9 @@ from tools.chem_llm import (
     predict_molecule_binding,
     predict_molecule_synthesizability,
 )
+from tools.composition_generation import (
+    composition_enumerator,
+)
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -161,6 +164,9 @@ mcp.tool()(lula_generate_robot_description)
 # Fine-tuned chemistry LLM tools
 mcp.tool()(predict_molecule_binding)
 mcp.tool()(predict_molecule_synthesizability)
+
+# Composition generation tools
+mcp.tool()(composition_enumerator)
 
 
 if __name__ == "__main__":

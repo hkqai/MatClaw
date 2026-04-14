@@ -156,6 +156,12 @@ python -m pytest tests/pymatgen/test_enumeration_generator.py -v
 | `pymatgen_defect_generator` | Generate point defect supercells (vacancies, substitutions, interstitials) |
 | `pymatgen_sqs_generator` | Generate special quasirandom structures (SQS) for alloy modeling |
 
+### Composition Generation
+
+| Tool | Description |
+|---|---|
+| `composition_enumerator` | Enumerate charge-balanced compositions from element lists for composition-space exploration |
+
 ### ML Prediction
 
 | Tool | Description |

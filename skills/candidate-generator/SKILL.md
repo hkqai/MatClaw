@@ -1,23 +1,185 @@
 ---
 name: candidate-generator
-description: Generate inorganic crystal structure candidates for computational materials discovery workflows. Use this skill whenever the user wants to build, explore, or diversify a pool of inorganic structures for DFT screening, high-throughput calculations, machine learning dataset construction, or property-guided search. This skill covers the full candidate generation pipeline - seed structure creation -> chemical space exploration -> configurational ordering -> defect generation -> ensemble augmentation.
+description: Generate inorganic crystal structure candidates for computational materials discovery workflows. Use this skill whenever the user wants to build, explore, or diversify a pool of inorganic structures for DFT screening, high-throughput calculations, machine learning dataset construction, or property-guided search. This skill covers the COMPLETE candidate generation pipeline from elements to structures - composition discovery (elements-only entry) -> seed structure creation -> chemical space exploration -> configurational ordering -> defect generation -> ensemble augmentation.
 ---
 
 # Inorganic Candidate Generation
 
 This skill guides the systematic generation of inorganic crystal structure candidates using
-a suite of seven pymatgen-based tools. The methodology is:
-**prototype → explore chemistry → resolve disorder → add defects → augment**,
+a suite of ten tools (3 composition discovery + 7 structure generation). The methodology is:
+**discover compositions → prototype → explore chemistry → resolve disorder → add defects → augment**,
 selecting the appropriate branch(es) for the discovery goal.
 
-The core philosophy: candidate generation is a funnel. Start broad (many chemistries,
-many configurations), then narrow using physical filters (charge neutrality, Ewald energy,
-thermodynamic stability from MP). Always track structures in the ASE database using
-`ase_store_result` so nothing is recomputed.
+The core philosophy: candidate generation is a funnel. Start broad (many compositions,
+many chemistries, many configurations), then narrow using physical filters (charge neutrality,
+Ewald energy, thermodynamic stability from MP). Always track structures in the ASE database
+using `ase_store_result` so nothing is recomputed.
+
+**Entry Points:**
+- **Elements only** (Li-Mn-P-O) → Phase 0 (composition discovery)
+- **Composition known** (LiMnPO₄) → Phase 1 (seed structure)
+- **Structure exists** (from MP/CIF) → Phase 2 (chemical exploration)
 
 ---
 
 ## Tool Catalogue
+
+### Phase 0 Tools: Composition Discovery
+
+### 0A. `composition_enumerator` — Oxidation-Balanced Enumeration
+Generates all charge-balanced compositions from element lists and oxidation state constraints.
+Use when you know which elements to explore but not which compositions exist.
+
+**Key parameters:**
+- `elements`: list of element symbols, e.g. `['Li', 'Mn', 'P', 'O']`
+- `oxidation_states`: dict mapping elements to allowed oxidation states, e.g. `{'Li': [1], 'Mn': [2, 3], 'P': [5], 'O': [-2]}`
+- `max_formula_units`: cap on formula unit count (default 6, increase for complex compositions)
+- `max_atoms_per_formula`: hard limit on total atoms (default 30, prevents combinatorial explosion)
+- `anion_cation_ratio_max`: maximum anion:cation ratio (default 4.0, excludes Li₁Mn₁₀P₁₀O₅₀-type nonsense)
+- `min_cation_fraction`: minimum cation fraction (default 0.05, excludes Li₀.₀₁O₀.₉₉-type nonsense)
+- `require_all_elements`: if True, only returns compositions containing ALL specified elements (default True)
+- `allow_mixed_valence`: if True, allows mixed oxidation states (e.g., Mn²⁺/Mn³⁺ in mixed-valence manganates) (default True)
+- `sort_by`: `'atoms'` (fewest atoms first), `'anion_ratio'` (lowest O/cation ratio), `'alphabetical'`
+- `output_format`: `'minimal'` (formula strings) or `'detailed'` (full metadata)
+
+**Returns:**
+```python
+{
+  "success": True,
+  "count": 12,
+  "compositions": [
+    "Li3PO4",
+    "LiMnPO4",  # Target composition! (olivine battery cathode)
+    "LiFePO4",  # If Fe added to oxidation_states
+    ...
+  ],
+  # OR with output_format='detailed':
+  "compositions": [
+    {
+      "formula": "LiMnPO4",
+      "reduced_formula": "LiMnPO4",
+      "num_atoms": 7,
+      "cation_count": 3,
+      "anion_count": 4,
+      "anion_cation_ratio": 1.33,
+      "oxidation_states": {"Li": 1, "Mn": 2, "P": 5, "O": -2},
+      "charge": 0
+    },
+    ...
+  ]
+}
+```
+
+**Chemical filters explained:**
+- `max_atoms_per_formula=30`: Prevents unrealistically large formulas (e.g., Li₁₀Mn₁₀P₁₀O₄₀ with 70 atoms)
+- `anion_cation_ratio_max=4.0`: Prevents anion-heavy compositions (e.g., LiMn₁₀P₁₀O₅₀ with ratio ≈ 2.4)
+- `min_cation_fraction=0.05`: Prevents trace cation compositions (e.g., Li₀.₀₁Mn₀.₉₉O unphysical)
+
+**When to adjust defaults:**
+- Increase `max_formula_units` for complex phases (spinels, Ruddlesden-Popper)
+- Decrease `anion_cation_ratio_max` for metal-rich compounds
+- Set `require_all_elements=False` to include binaries (e.g., Li₂O, Mn₃O₄) alongside ternaries/quaternaries
+
+**Workflow:**
+1. Call `composition_enumerator` with target elements
+2. Filter results by `stability_analyzer` (eliminate compositions far above convex hull)
+3. For each stable composition, proceed to Phase 1 (prototype_builder) or query MP for existing structures
+
+---
+
+### 0B. `pymatgen_substitution_predictor` — ICSD-Based Substitution
+Predicts likely element substitutions using data mining from 100k+ ICSD structures.
+Use when you have a known composition and want to find chemically reasonable analogues.
+
+**Key parameters:**
+- `composition`: starting composition, e.g. `'LiFePO4'`
+- `to_this_composition`: if False (default), finds what this composition can become; if True, finds what can transform INTO this composition
+- `threshold`: probability cutoff (0.001 = permissive, 0.1 = strict)
+- `max_suggestions`: limit number of suggestions (default None = unlimited)
+- `group_by_probability`: if True, returns {high: [...], medium: [...], low: [...]}
+
+**Returns:**
+```python
+{
+  "success": True,
+  "original_composition": "LiFePO4",
+  "direction": "from_this_composition",
+  "suggestions": {
+    "high": [{"formula": "LiMnPO4", "probability": 0.85}, ...],
+    "medium": [{"formula": "LiCoPO4", "probability": 0.45}, ...],
+    "low": [{"formula": "LiNiPO4", "probability": 0.02}, ...]
+  }
+}
+```
+
+**Use case: Template-based discovery**
+```python
+# Find what LiFePO₄ can transform into
+result = pymatgen_substitution_predictor('LiFePO4', threshold=0.01)
+
+# Extract high-confidence suggestions
+target_formulas = [s['formula'] for s in result['suggestions']['high']]
+
+# For each, check MP for structures
+for formula in target_formulas:
+    mp_result = mp_search_materials(formula=formula)
+    if mp_result['count'] > 0:
+        # Structure exists in MP, can use directly
+```
+
+**Limitation:** ICSD substitution patterns are conservative (based on existing materials).
+For truly novel compositions (e.g., where no close analogues exist in the database),
+use `composition_enumerator` instead.
+
+---
+
+### 0C. `mp_search_materials` — Template Structure Search
+Queries Materials Project for structures matching composition/chemistry constraints.
+Use to find structural templates for target element systems.
+
+**Key parameters for template search:**
+- `elements`: list of elements, e.g. `['Li', 'Fe', 'P', 'O']` (finds all Li-Fe-P-O compounds)
+- `num_elements`: constrain to binary (2), ternary (3), quaternary (4), etc.
+- `crystal_system`: `'cubic'`, `'tetragonal'`, `'orthorhombic'`, etc. (omit for all)
+- `spacegroup_number`: specific space group (e.g., 225 for fluorite)
+- `is_stable`: True (only thermodynamically stable), False (include metastable)
+- `limit`: max results (default 100)
+
+**Template discovery workflow:**
+```python
+# Step 1: Find analogues with similar chemistry (Fe instead of Mn)
+li_fe_p_o = mp_search_materials(
+    elements=['Li', 'Fe', 'P', 'O'],
+    num_elements=4,
+    is_stable=True,
+    limit=50
+)
+
+# Step 2: Extract stoichiometric patterns
+patterns = set()
+for mat in li_fe_p_o['materials']:
+    # Identify pattern: LiMPO₄, Li₃M₂(PO₄)₃, etc.
+    patterns.add(mat['composition_reduced'])
+
+# Step 3: Use patterns to constrain composition_enumerator
+if 'NaMnPO4' in patterns:
+    # Found olivine pattern (AMPO₄)! Prioritize compositions around 7 atoms
+    result = composition_enumerator(
+        elements=['Li', 'Mn', 'P', 'O'],
+        oxidation_states={'Li': [1], 'Mn': [2], 'P': [5], 'O': [-2]},
+        max_formula_units=8  # Allows LiMnPO₄ (7 atoms)
+    )
+```
+
+**When no direct templates exist:**
+If `mp_search_materials(['Li', 'Mn', 'P', 'O'])` returns 0 results, try:
+1. Substitute one element: `['Na', 'Mn', 'P', 'O']` or `['Li', 'Fe', 'P', 'O']`
+2. Search broader family: `['alkali', 'TM', 'P', 'O']` where TM = transition metal
+3. Fall back to `composition_enumerator` (exhaustive enumeration)
+
+---
+
+### Phase 1-5 Tools: Structure Generation
 
 ### 1. `pymatgen_prototype_builder` — Seed Structure
 Builds an ideal crystal from a spacegroup number/symbol, species list, and lattice parameters.
@@ -152,6 +314,153 @@ of perturbed structures. Does **not** change composition.
 ---
 
 ## Workflow Phases
+
+### Phase 0: Composition Discovery (CONDITIONAL)
+
+**When to use this phase:**
+- You only know which elements to explore (e.g., Li-Mn-P-O for battery cathodes)
+- You don't know which compositions exist or are stable
+- You want to discover new materials in a chemical system
+
+**Skip this phase if:**
+- You already have a target composition (go to Phase 1)
+- You have an existing structure (go to Phase 2)
+
+---
+
+#### Strategy 1: Exhaustive Enumeration (Fast, Systematic)
+
+Use `composition_enumerator` to generate ALL charge-balanced compositions:
+
+```python
+# Example: Discover Li-Mn-P-O battery cathode compositions
+result = composition_enumerator(
+    elements=['Li', 'Mn', 'P', 'O'],
+    oxidation_states={
+        'Li': [1],       # Li⁺
+        'Mn': [2, 3],    # Mn²⁺, Mn³⁺
+        'P': [5],        # P⁵⁺ (phosphate)
+        'O': [-2]        # O²⁻
+    },
+    max_formula_units=6,
+    max_atoms_per_formula=30,
+    require_all_elements=True,  # Only quaternary Li-Mn-P-O, not ternaries
+    sort_by='atoms',  # Simplest compositions first
+    output_format='detailed'
+)
+
+# Result: ~12 compositions including LiMnPO₄, Li₃Mn(PO₄)₂, Mn₃(PO₄)₂, etc.
+compositions = result['compositions']
+```
+
+**Next step:** Filter by stability
+```python
+stable_compositions = []
+for comp in compositions:
+    stability = stability_analyzer(composition=comp['formula'])
+    if stability['is_stable'] or stability['energy_above_hull'] < 0.1:
+        stable_compositions.append(comp['formula'])
+
+# Feed to Phase 1 or query MP for existing structures
+```
+
+---
+
+#### Strategy 2: Template-Based Discovery (Structural Analogues)
+
+Find Materials Project structures with similar chemistry, extract patterns:
+
+```python
+# Step 1: Search for analogues (Na or Fe instead of Li/Mn)
+na_templates = mp_search_materials(
+    elements=['Na', 'Mn', 'P', 'O'],
+    num_elements=4,
+    is_stable=True
+)
+
+if na_templates['count'] == 0:
+    # Try Fe instead of Mn (well-known LiFePO4)
+    fe_templates = mp_search_materials(
+        elements=['Li', 'Fe', 'P', 'O'],
+        num_elements=4,
+        is_stable=True
+    )
+
+# Step 2: Extract stoichiometric patterns
+patterns = {}
+for mat in fe_templates['materials']:
+    formula = mat['composition_reduced']
+    patterns[formula] = mat['spacegroup_number']
+
+print(f"Found patterns: {patterns}")
+# Example output: {'LiFePO4': 62, 'Li3PO4': 61, ...}
+
+# Step 3: Use patterns to guide composition_enumerator
+if 'LiFePO4' in patterns:
+    # Olivine pattern exists (AMPO₄) → prioritize LiMnPO₄
+    target_formulas = ['LiMnPO4']
+    
+if 'Li3PO4' in patterns:
+    # Phosphate pattern exists → Li₃PO₄ likely!
+    target_formulas.append('Li3PO4')
+
+# Proceed to Phase 1 with these target compositions
+```
+
+---
+
+#### Strategy 3: ICSD Substitution Patterns (Data-Driven)
+
+Find statistically likely substitutions from known materials:
+
+```python
+# Starting from known La₂WO₆ structure
+substitutions = pymatgen_substitution_predictor(
+    composition='La2WO6',
+    to_this_composition=False,  # What can La₂WO₆ become?
+    threshold=0.01,
+    group_by_probability=True
+)
+
+# Extract high-confidence suggestions
+high_prob = substitutions['suggestions']['high']
+target_formulas = [s['formula'] for s in high_prob]
+
+# Check which ones exist in MP
+for formula in target_formulas:
+    mp_result = mp_search_materials(formula=formula)
+    if mp_result['count'] > 0:
+        print(f"{formula}: exists in MP (mp-id: {mp_result['materials'][0]['material_id']})")
+    else:
+        print(f"{formula}: novel composition candidate!")
+```
+
+**Limitation:** Substitution predictor is conservative (only suggests observed patterns).
+For truly novel compositions, use Strategy 1 (enumeration).
+
+---
+
+#### Decision Tree for Phase 0
+
+```
+START: Have elements, need compositions
+│
+├─ Known analogue exists? (e.g., LiFePO₄ for Li-Mn-P-O)
+│  ├─ YES → Strategy 3 (substitution_predictor) + Strategy 2 (MP templates)
+│  └─ NO → Strategy 1 (composition_enumerator)
+│
+├─ Chemical system well-studied? (battery cathodes, perovskites)
+│  ├─ YES → Strategy 2 (MP templates) first, then Strategy 1 if gaps
+│  └─ NO → Strategy 1 (composition_enumerator)
+│
+└─ Exploratory discovery? (don't know what to expect)
+   └─ Strategy 1 (composition_enumerator) → filter by stability
+```
+
+**Output of Phase 0:** Ranked list of compositions
+**Next phase:** For each composition, go to Phase 1 (build structure) or Phase 2 (if MP structure exists)
+
+---
 
 ### Phase 1: Seed Structure
 
@@ -445,6 +754,128 @@ for dc in defect_cells['structures']:
                          key_value_pairs={'defect_label': dc['metadata']['defect_label']})
 ```
 
+### Phase 0: Li-Mn-P-O Battery Cathode Discovery (Elements-Only Entry)
+
+```python
+# User request: "Discover battery cathode materials in the Li-Mn-P-O system"
+# Entry point: Elements only (no composition known)
+
+# Step 1: Enumerate all charge-balanced Li-Mn-P-O compositions
+result = composition_enumerator(
+    elements=['Li', 'Mn', 'P', 'O'],
+    oxidation_states={'Li': [1], 'Mn': [2, 3], 'P': [5], 'O': [-2]},
+    max_formula_units=10,
+    require_all_elements=True,  # Only quaternary Li-Mn-P-O
+    sort_by='atoms',
+    output_format='detailed'
+)
+
+print(f"Generated {result['count']} compositions")
+# Output: ~12 compositions (LiMnPO4, Li3Mn(PO4)2, Mn3(PO4)2, etc.)
+
+# Step 2: Filter by thermodynamic stability
+stable_candidates = []
+for comp in result['compositions']:
+    stability = stability_analyzer(composition=comp['formula'])
+    if stability['energy_above_hull'] < 0.1:  # Within 100 meV/atom
+        stable_candidates.append({
+            'formula': comp['formula'],
+            'num_atoms': comp['num_atoms'],
+            'energy_above_hull': stability['energy_above_hull']
+        })
+        
+print(f"Found {len(stable_candidates)} stable/metastable compositions")
+
+# Step 3: Check MP for existing structures
+for candidate in stable_candidates:
+    mp_result = mp_search_materials(formula=candidate['formula'])
+    
+    if mp_result['count'] > 0:
+        # Structure exists in MP - use directly
+        print(f"{candidate['formula']}: Found in MP (mp-{mp_result['materials'][0]['material_id']})")
+        candidate['mp_structure'] = mp_result['materials'][0]['structure']
+        candidate['spacegroup'] = mp_result['materials'][0]['spacegroup_number']
+    else:
+        # Novel composition - need to build from prototype
+        print(f"{candidate['formula']}: Novel! Need to propose prototype.")
+        candidate['mp_structure'] = None
+        
+# Step 4: For compositions without MP structures, try template-based
+novel_compositions = [c for c in stable_candidates if c['mp_structure'] is None]
+
+if len(novel_compositions) > 0:
+    # Search for Fe-based analogues (LiFePO4 is well-known olivine cathode)
+    fe_templates = mp_search_materials(
+        elements=['Li', 'Fe', 'P', 'O'],
+        num_elements=4,
+        is_stable=True
+    )
+    
+    if fe_templates['count'] > 0:
+        # Found templates!
+        print(f"Found {fe_templates['count']} Li-Fe-P-O templates")
+        
+        # Match stoichiometry patterns
+        for novel in novel_compositions:
+            # Look for matching stoichiometry (e.g., LiMnPO4 → LiFePO4)
+            fe_formula = novel['formula'].replace('Mn', 'Fe')
+            
+            for template in fe_templates['materials']:
+                if template['composition_reduced'] == fe_formula:
+                    print(f"  {novel['formula']}: Use {fe_formula} as template (SG {template['spacegroup_number']})")
+                    novel['template_spacegroup'] = template['spacegroup_number']
+                    novel['template_structure'] = template['structure']
+                    break
+
+# Step 5: Feed to Phase 1 (structure generation)
+for candidate in stable_candidates:
+    if candidate.get('mp_structure'):
+        # MP structure exists → go to Phase 2 (chemical exploration)
+        print(f"Processing {candidate['formula']} with MP structure...")
+        # GOTO Phase 2
+        
+    elif candidate.get('template_structure'):
+        # Template exists → use substitution_generator
+        print(f"Generating {candidate['formula']} from {candidate.get('template_formula')} template...")
+        
+        substituted = pymatgen_substitution_generator(
+            input_structures=candidate['template_structure'],
+            substitutions={'Fe': 'Mn'},  # Mn replaces Fe
+            n_structures=1,
+            enforce_charge_neutrality=True
+        )
+        candidate['structure'] = substituted['structures'][0]
+        
+    else:
+        # No template → need to build from common prototype
+        print(f"Building {candidate['formula']} from common prototype...")
+        # User would specify prototype or use heuristics
+        # GOTO Phase 1 (prototype_builder)
+
+print("\nPhase 0 complete. Discovered compositions:")
+for i, c in enumerate(stable_candidates[:5]):
+    print(f"{i+1}. {c['formula']} (ΔH={c['energy_above_hull']:.3f} eV/atom, {c['num_atoms']} atoms)")
+```
+
+**Output example:**
+```
+Generated 12 compositions
+Found 6 stable/metastable compositions
+LiMnPO4: Found in MP (mp-19017)
+Li3PO4: Found in MP (mp-13725)
+Mn3(PO4)2: Found in MP (mp-7654)
+Li2MnP2O7: Novel! Need to propose prototype.
+...
+Found 8 Li-Fe-P-O templates
+  LiMnPO4: Use LiFePO4 as template (SG 62 - olivine)
+  
+Phase 0 complete. Discovered compositions:
+1. LiMnPO4 (ΔH=0.000 eV/atom, 7 atoms)
+2. Li3PO4 (ΔH=0.010 eV/atom, 8 atoms)
+3. Mn3(PO4)2 (ΔH=0.025 eV/atom, 13 atoms)
+...
+```
+
 ---
 
 ## Candidate Generation Decision Algorithm
@@ -453,15 +884,233 @@ for dc in defect_cells['structures']:
 
 ### STEP 0: Analyze User Request
 
-**Step 0.1:** Identify starting point
+**Step 0.1:** Identify starting point and entry phase
 ```
-IF user has existing structure (from MP, CIF, ASE database):
+IF user provides ONLY elements (e.g., "Li-Mn-P-O", "Cu-Zn-Sn-S"):
+    # Elements-only entry point
+    GOTO STEP 0A (Phase 0: Composition Discovery)
+    
+ELSE IF user has existing structure (from MP, CIF, ASE database):
+    # Structure exists
     SET starting_structure = existing_structure
-    GOTO STEP 1 (skip seed generation)
-ELSE IF user specifies spacegroup + composition:
-    GOTO STEP 1 (seed generation needed)
+    GOTO STEP 2 (Phase 2: Chemical Space Exploration)
+    
+ELSE IF user specifies composition + spacegroup:
+    # Composition known, need to build structure
+    GOTO STEP 1 (Phase 1: Seed Structure Generation)
+    
+ELSE IF user specifies composition only (e.g., "LiMnPO4"):
+    # Try to find structure in MP first
+    CALL mp_search_materials(formula=user_composition)
+    IF mp_result['count'] > 0:
+        SET starting_structure = mp_result['materials'][0]['structure']
+        GOTO STEP 2 (Phase 2: Chemical Space Exploration)
+    ELSE:
+        # No MP structure, need to build from prototype
+        REQUEST spacegroup/prototype from user OR use common prototype heuristics
+        GOTO STEP 1 (Phase 1: Seed Structure Generation)
+        
 ELSE:
     REQUEST clarification from user
+```
+
+---
+
+### STEP 0A: Phase 0 — Composition Discovery (CONDITIONAL)
+
+**Condition:** Only execute if user provides elements without composition
+
+**Step 0A.1:** Determine discovery strategy
+```
+IF user mentions known analogue (e.g., "like LiFePO4 but with Mn"):
+    SET strategy = "template_based"
+    SET analogue_composition = extract_analogue_from_request()
+    GOTO Step 0A.2 (template-based discovery)
+    
+ELSE IF chemical system is well-studied (battery, perovskite, etc.):
+    SET strategy = "hybrid"  # Templates + enumeration
+    GOTO Step 0A.3 (hybrid approach)
+    
+ELSE:
+    SET strategy = "enumeration"  # Exhaustive
+    GOTO Step 0A.4 (enumeration-based discovery)
+```
+
+---
+
+**Step 0A.2:** Template-based discovery
+```
+# Strategy: Find structural analogues in MP, extract patterns, substitute target elements
+
+SET target_elements = user_specified_elements  # e.g., ['Li', 'Mn', 'P', 'O']
+SET num_target_elements = len(target_elements)
+
+# Find chemical analogues (same group, similar oxidation states)
+SET analogue_elements = find_chemical_analogues(target_elements)
+# Example: Li → Na, K; Mn → Fe, Co, Ni
+
+# Search MP for analogue structures
+FOR EACH analogue_set IN analogue_elements:
+    CALL mp_search_materials(
+        elements=analogue_set,
+        num_elements=num_target_elements,
+        is_stable=True,
+        limit=50
+    )
+    
+    IF mp_result['count'] > 0:
+        # Found templates!
+        SET template_structures = mp_result['materials']
+        BREAK  # Use first successful analogue system
+
+IF template_structures is empty:
+    # No templates found, fall back to enumeration
+    GOTO Step 0A.4
+
+# Extract stoichiometric patterns from templates
+SET patterns = {}
+FOR EACH structure IN template_structures:
+    SET formula = structure['composition_reduced']
+    SET sg = structure['spacegroup_number']
+    patterns[formula] = sg
+
+# Generate target compositions matching patterns
+SET target_compositions = []
+FOR EACH pattern_formula IN patterns.keys():
+    # Substitute target elements into pattern
+    SET target_formula = substitute_elements(pattern_formula, analogue_elements, target_elements)
+    target_compositions.append({
+        'formula': target_formula,
+        'template_spacegroup': patterns[pattern_formula],
+        'template_formula': pattern_formula,
+        'confidence': 'high'  # Based on MP template
+    })
+
+# Verify compositions are charge-balanced
+SET valid_compositions = []
+FOR EACH comp IN target_compositions:
+    IF is_charge_balanced(comp['formula']):
+        valid_compositions.append(comp)
+
+SET discovered_compositions = valid_compositions
+GOTO Step 0A.5 (filter and rank)
+```
+
+---
+
+**Step 0A.3:** Hybrid approach (templates + enumeration)
+```
+# First try template-based (Step 0A.2)
+EXECUTE Step 0A.2
+
+IF len(discovered_compositions) < 5:
+    # Insufficient templates, supplement with enumeration
+    EXECUTE Step 0A.4 (enumeration)
+    
+    # Merge results, prioritizing template-based
+    FOR EACH enum_comp IN enumeration_results:
+        IF enum_comp NOT IN discovered_compositions:
+            discovered_compositions.append({
+                'formula': enum_comp,
+                'confidence': 'medium'  # From enumeration, not template
+            })
+
+GOTO Step 0A.5 (filter and rank)
+```
+
+---
+
+**Step 0A.4:** Enumeration-based discovery
+```
+# Strategy: Generate ALL charge-balanced compositions, filter by stability
+
+SET elements = user_specified_elements
+
+# Determine oxidation states
+IF user_specified_oxidation_states:
+    SET oxidation_states = user_specified_oxidation_states
+ELSE:
+    # Use common oxidation states from periodic table
+    SET oxidation_states = get_common_oxidation_states(elements)
+    # Example: {'Li': [1], 'Mn': [2, 3], 'P': [5], 'O': [-2]}
+
+# Call composition_enumerator
+CALL composition_enumerator(
+    elements=elements,
+    oxidation_states=oxidation_states,
+    max_formula_units=6,  # Adjust based on system complexity
+    max_atoms_per_formula=30,
+    require_all_elements=True,  # Only return compositions with ALL elements
+    allow_mixed_valence=True,  # Allow Pr³⁺/Pr⁴⁺ mixing
+    sort_by='atoms',  # Simplest first
+    output_format='detailed'
+)
+
+SET discovered_compositions = result['compositions']
+
+# Add confidence metadata
+FOR EACH comp IN discovered_compositions:
+    comp['confidence'] = 'enumeration'  # Not template-based
+    comp['template_spacegroup'] = None
+
+GOTO Step 0A.5 (filter and rank)
+```
+
+---
+
+**Step 0A.5:** Filter by stability and rank
+```
+# Filter out compositions far above convex hull
+SET stable_compositions = []
+
+FOR EACH comp IN discovered_compositions:
+    # Check thermodynamic stability
+    CALL stability_analyzer(composition=comp['formula'])
+    
+    IF stability_result['is_stable']:
+        comp['energy_above_hull'] = 0.0
+        comp['stability_tier'] = 'stable'
+        stable_compositions.append(comp)
+    ELSE IF stability_result['energy_above_hull'] < 0.1:
+        comp['energy_above_hull'] = stability_result['energy_above_hull']
+        comp['stability_tier'] = 'metastable'
+        stable_compositions.append(comp)
+    # Else: discard (too unstable)
+
+# Rank by multiple criteria
+SET ranking_score = []
+FOR EACH comp IN stable_compositions:
+    score = 0
+    
+    # Criterion 1: Stability (most important)
+    IF comp['stability_tier'] == 'stable':
+        score += 100
+    ELSE:
+        score += 50
+    
+    # Criterion 2: Confidence (template-based > enumeration)
+    IF comp['confidence'] == 'high':  # From MP template
+        score += 50
+    ELSE IF comp['confidence'] == 'medium':
+        score += 25
+    
+    # Criterion 3: Simplicity (fewer atoms preferred)
+    score -= comp['num_atoms']  # Penalize complexity
+    
+    comp['ranking_score'] = score
+
+# Sort by ranking score (highest first)
+SORT stable_compositions BY ranking_score DESCENDING
+
+# Present top candidates to user
+SET top_candidates = stable_compositions[:10]  # Top 10
+
+OUTPUT: "Phase 0 discovered {len(stable_compositions)} stable/metastable compositions:"
+FOR i, comp IN ENUMERATE(top_candidates):
+    OUTPUT: "{i+1}. {comp['formula']} (ΔH={comp['energy_above_hull']} eV/atom, {comp['num_atoms']} atoms, {comp['stability_tier']})"
+
+SET target_compositions = top_candidates
+GOTO STEP 1 (Phase 1: Build structures for these compositions)
 ```
 
 ---
