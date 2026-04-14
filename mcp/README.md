@@ -148,6 +148,7 @@ python -m pytest tests/pymatgen/test_enumeration_generator.py -v
 | Tool | Description |
 |---|---|
 | `pymatgen_prototype_builder` | Build structures from spacegroup, species, and lattice parameters |
+| `pymatgen_substitution_predictor` | Predict likely element substitutions using ICSD data mining (composition → composition) |
 | `pymatgen_substitution_generator` | Generate structures by element substitution |
 | `pymatgen_ion_exchange_generator` | Generate ion-exchanged variants with charge balancing |
 | `pymatgen_perturbation_generator` | Randomly perturb atomic positions and lattice |
