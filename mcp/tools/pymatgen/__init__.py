@@ -6,6 +6,7 @@ from .pymatgen_perturbation_generator import pymatgen_perturbation_generator
 from .pymatgen_enumeration_generator import pymatgen_enumeration_generator
 from .pymatgen_defect_generator import pymatgen_defect_generator
 from .pymatgen_sqs_generator import pymatgen_sqs_generator
+from .pymatgen_disorder_generator import pymatgen_disorder_generator
 
 __all__ = [
     "pymatgen_prototype_builder",
@@ -16,4 +17,5 @@ __all__ = [
     "pymatgen_enumeration_generator",
     "pymatgen_defect_generator",
     "pymatgen_sqs_generator",
+    "pymatgen_disorder_generator",
 ]

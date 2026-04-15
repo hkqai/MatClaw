@@ -6,8 +6,8 @@ description: Generate inorganic crystal structure candidates for computational m
 # Inorganic Candidate Generation
 
 This skill guides the systematic generation of inorganic crystal structure candidates using
-a suite of ten tools (3 composition discovery + 7 structure generation). The methodology is:
-**discover compositions → prototype → explore chemistry → resolve disorder → add defects → augment**,
+a suite of tools for composition discovery and structure generation. The methodology is:
+**discover compositions → prototype → explore chemistry → add disorder → resolve disorder → add defects → augment**,
 selecting the appropriate branch(es) for the discovery goal.
 
 The core philosophy: candidate generation is a funnel. Start broad (many compositions,
@@ -237,6 +237,57 @@ so that total ionic charge is conserved. Only charge-neutral structures are retu
 - `max_structures`: cap on returned structures per input (default 10)
 
 **Prototypical use cases:** Li → Na/K battery cathode analogues, Ca²⁺ → La³⁺ doping in oxides.
+
+---
+
+### 3A. `pymatgen_disorder_generator` — Add Configurational Disorder (Order → Disorder)
+Converts **fully ordered structures** into disordered structures with mixed site occupancies.
+This is the inverse of enumeration: creates the disordered input structures needed for SQS
+generation or systematic enumeration.
+
+**Key parameters:**
+- `site_substitutions`: dict mapping elements to their disordered occupancies
+  - Format: `{element: {species1: fraction1, species2: fraction2, ...}}`
+  - Ternary: `{'Co': {'Ni': 0.333, 'Mn': 0.333, 'Co': 0.334}}` — NMC mixing
+  - Fractions must sum to 1.0 (±`composition_tolerance`)
+- `site_selector`: strategy for which sites receive disorder (default: `'all_equivalent'`)
+  - `'all_equivalent'`: apply to all symmetry-equivalent sites (recommended)
+  - `'wyckoff_4a'`: specific Wyckoff position
+  - `'first_site'`: only first occurrence (breaks symmetry, use with caution)
+- `validate_charge_neutrality`: `True` (default) — warns if disorder creates charge imbalance
+- `composition_tolerance`: tolerance for fraction sums (default 0.01 = 1%)
+
+**Typical workflow:**
+```python
+# Step 1: Get ordered structure from Materials Project
+mp_result = mp_get_material_properties(
+    material_ids=["mp-1097088"],  # LiNiO₂
+    properties=["structure"]
+)
+
+# Step 2: Add disorder for NMC622 battery cathode Li(Ni₀.₆Mn₀.₂Co₀.₂)O₂
+disordered = pymatgen_disorder_generator(
+    input_structures=mp_result["properties"][0]["structure"],
+    site_substitutions={"Ni": {"Ni": 0.6, "Mn": 0.2, "Co": 0.2}}
+)
+
+# Step 3: Generate SQS for DFT calculations
+sqs = pymatgen_sqs_generator(
+    input_structures=disordered["structures"],
+    supercell_size=16,
+    n_structures=3
+)
+```
+
+**Use cases:**
+- Battery cathodes: Li(Ni₀.₆Mn₀.₂Co₀.₂)O₂ (NMC622), (Li,Na)CoO₂
+- High-entropy materials: (Mg,Co,Ni,Cu,Zn)O with equimolar mixing
+- Doped semiconductors: Si_{1-x}Ge_x, Al_xGa_{1-x}N
+- Mixed anion systems: Li₂O_{1-x}F_x
+
+**When to use:** When you have an ordered parent structure (from MP or prototype) and need
+to model a specific composition with fractional occupancies. Output is deterministic (one
+disordered structure per input) and ready for SQS or enumeration.
 
 ---
 

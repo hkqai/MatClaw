@@ -34,6 +34,7 @@ from tools.pymatgen import (
     pymatgen_enumeration_generator,
     pymatgen_defect_generator,
     pymatgen_sqs_generator,
+    pymatgen_disorder_generator,
 )
 from tools.analysis import (
     structure_validator,
@@ -121,6 +122,7 @@ mcp.tool()(pymatgen_perturbation_generator)
 mcp.tool()(pymatgen_enumeration_generator)
 mcp.tool()(pymatgen_defect_generator)
 mcp.tool()(pymatgen_sqs_generator)
+mcp.tool()(pymatgen_disorder_generator)
 
 # Analysis tools for materials screening
 mcp.tool()(structure_validator)
