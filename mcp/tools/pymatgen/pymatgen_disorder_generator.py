@@ -1,18 +1,19 @@
 """
 Tool for adding configurational disorder (mixed site occupancies) to ordered structures.
 
-This tool converts fully ordered crystal structures into disordered structures with partial
+This tool converts fully ordered crystal structures into disordered structures with partial/fractional
 site occupancies, which is essential for modeling solid solutions, high-entropy materials,
-and doped systems. The disordered output structures can be used as input for SQS generation
+partial substitutions, and doped systems. The disordered output structures can be used as input for SQS generation
 or systematic enumeration.
 
 Typical workflow:
     1. Get ordered structure from Materials Project or prototype
-    2. Add disorder with this tool
+    2. Add disorder with this tool → fractional occupancy on sites
     3. Generate SQS with pymatgen_sqs_generator or enumerate with pymatgen_enumeration_generator
 
 Examples:
     - Solid solutions: (Li,Na)CoO₂, Al_xGa_{1-x}N
+    - Partial substitutions: Li[Ni₀.₈Co₀.₁Mn₀.₁]O₂
     - High-entropy materials: (Mg,Co,Ni,Cu,Zn)O
     - Doped semiconductors: Si_{1-x}Ge_x
     - Mixed anion systems: Li₂O_{1-x}F_x
@@ -39,8 +40,9 @@ def pymatgen_disorder_generator(
         Dict[str, Dict[str, float]],
         Field(
             description=(
-                "Mapping of elements to their disordered occupancies. "
+                "Mapping of elements to their disordered (fractional) occupancies. "
                 "Format: {element: {species1: fraction1, species2: fraction2, ...}}. "
+                "This creates fractional site occupancy where ALL sites of the element are modified. "
                 "Examples: "
                 "- {'Co': {'Ni': 0.333, 'Mn': 0.333, 'Co': 0.334}} — NMC ternary mixing. "
                 "- {'O': {'O': 0.5, 'F': 0.5}} — mixed anion on O sites. "
@@ -132,6 +134,10 @@ def pymatgen_disorder_generator(
     """
     Add configurational disorder (mixed site occupancies) to ordered crystal structures.
 
+    *** CREATES FRACTIONAL SITE OCCUPANCY ***
+    This tool generates structures where sites have partial occupancy.
+    Output structures have fractional composition like Li[Ni₀.₈Co₀.₁Mn₀.₁]O₂.
+    
     This tool is the inverse of pymatgen_enumeration_generator: it creates disordered
     structures FROM ordered ones, enabling solid solution and high-entropy material modeling.
 

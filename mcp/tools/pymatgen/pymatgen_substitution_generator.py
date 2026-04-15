@@ -1,7 +1,10 @@
 """
-Tool for generating structures via atomic substitution and doping.
+Tool for generating structures via atomic substitution and partial site replacement.
 Applies targeted or random element substitutions while preserving periodicity.
-Supports fractional doping, site-specific substitution, and charge neutrality enforcement.
+Supports partial site replacement (enumerating ordered configurations), site-specific substitution, and charge neutrality enforcement.
+
+NOTE: This tool generates ORDERED structures with integer occupancy by replacing specific sites.
+      For DISORDERED structures with fractional occupancy (e.g., Li[Ni0.8Mn0.2]O2), use pymatgen_disorder_generator instead.
 """
 
 from typing import Dict, Any, Optional, List, Union, Annotated
@@ -25,8 +28,9 @@ def pymatgen_substitution_generator(
             description="Substitution rules mapping elements to replacements. "
             "Simple: {'Li': 'Na', 'O': 'F'} - replace all Li with Na, all O with F. "
             "Multiple options: {'Li': ['Na', 'K', 'Mg']} - creates variants for each. "
-            "Fractional: {'Li': {'replace_with': 'Na', 'fraction': 0.5}} - replace 50% of Li sites. "
-            "Multiple fractional: {'Li': [{'replace_with': 'Na', 'fraction': 0.25}, {'replace_with': 'K', 'fraction': 0.5}]}."
+            "Partial site replacement: {'Li': {'replace_with': 'Na', 'fraction': 0.5}} - FULLY replace 50% of Li sites with Na (creates ordered structures, not fractional occupancy). "
+            "Multiple partial: {'Li': [{'replace_with': 'Na', 'fraction': 0.25}, {'replace_with': 'K', 'fraction': 0.5}]}. "
+            "NOTE: 'fraction' controls which sites are replaced, not occupancy. Use pymatgen_disorder_generator for fractional site occupancy."
         )
     ],
     site_selector: Annotated[
@@ -51,7 +55,7 @@ def pymatgen_substitution_generator(
             le=100,
             description="Number of structure variants to generate PER SUBSTITUTION COMBINATION (1-100). "
             "Total output count = n_structures × number_of_combinations, subject to max_attempts cap. "
-            "For fractional substitutions: creates n_structures different random site arrangements per combo. "
+            "For partial site replacement (fraction < 1.0): creates n_structures different random site arrangements per combo. "
             "For deterministic (fraction=1.0) substitutions: all n_structures copies are IDENTICAL — "
             "set n_structures=1 to avoid duplicate output. "
             "For multiple substitution options {'Ti': ['Mn','Fe','Co']}: one combination per option, "
@@ -84,13 +88,15 @@ def pymatgen_substitution_generator(
             "Default: 50."
         )
     ] = 50,
-    allow_multiple_occupancy: Annotated[
+    preserve_disorder: Annotated[
         bool,
         Field(
             default=False,
-            description="If True, allows partial occupancy of sites (disorder). "
-            "If False, generates fully ordered structures by creating supercells if needed. "
-            "Default: False (ordered structures)."
+            description="If True, preserves existing disorder in input structures. "
+            "If False, converts any disordered structures into fully ordered supercells. "
+            "NOTE: This parameter does NOT create fractional occupancy from partial substitutions - "
+            "fractional substitutions ALWAYS generate ordered enumerated structures regardless of this setting. "
+            "Default: False (convert disorder to ordered structures)."
         )
     ] = False,
     min_distance: Annotated[
@@ -115,16 +121,25 @@ def pymatgen_substitution_generator(
     ] = "dict"
 ) -> Dict[str, Any]:
     """
-    Generate structures by applying atomic substitutions and doping.
+    Generate structures by applying atomic substitutions and partial site replacement.
     
     Takes existing structures and applies element substitution rules to create
-    new candidate materials. Supports complete replacement, fractional doping,
-    site-specific substitution, and charge neutrality enforcement. 
+    new candidate materials. Supports complete replacement, partial site replacement (enumerating
+    ordered configurations where specific sites are fully substituted), site-specific substitution, 
+    and charge neutrality enforcement.
+    
+    IMPORTANT: This tool generates ORDERED structures with integer site occupancy.
+    For partial substitutions (fraction < 1.0), it enumerates different configurations where
+    a subset of sites are FULLY replaced (occu=1). For example, fraction=0.2 with 5 sites 
+    replaces 1 specific site, generating multiple variants with different site selections.
+    
+    For DISORDERED structures with fractional site occupancy (e.g., all Ni sites have 
+    80% Ni + 20% Mn), use pymatgen_disorder_generator instead. 
     
     Uses pymatgen transformation classes:
     - SubstitutionTransformation: Complete element replacement (fraction=1.0)
-    - ReplaceSiteSpeciesTransformation: Site-specific fractional substitutions
-    - OrderDisorderedStructureTransformation: Handle disordered structures
+    - ReplaceSiteSpeciesTransformation: Partial site replacement (fraction<1.0, fully replaces selected sites)
+    - OrderDisorderedStructureTransformation: Convert existing disorder to ordered supercells
     
     These transformation classes provide robust handling of symmetry preservation,
     automatic validation, and maintain transformation history.
@@ -341,7 +356,8 @@ def pymatgen_substitution_generator(
                                     warnings.append(f"SubstitutionTransformation failed for {element}→{replace_with}: {str(e)}")
                                     continue
                             else:
-                                # Fractional substitution using ReplaceSiteSpeciesTransformation
+                                # Partial site replacement using ReplaceSiteSpeciesTransformation
+                                # Selects a subset of sites to FULLY replace (creates ordered structures, not fractional occupancy)
                                 # Get all sites with the element
                                 if site_indices is None:
                                     site_indices = [i for i, site in enumerate(new_struct) 
@@ -372,7 +388,7 @@ def pymatgen_substitution_generator(
                                         'n_sites_replaced': len(sites_to_replace)
                                     }
                                 except Exception as e:
-                                    warnings.append(f"ReplaceSiteSpeciesTransformation failed for fractional {element}→{replace_with}: {str(e)}")
+                                    warnings.append(f"ReplaceSiteSpeciesTransformation failed for partial site replacement {element}→{replace_with}: {str(e)}")
                                     continue
                         
                         # Validate minimum distance
@@ -415,8 +431,8 @@ def pymatgen_substitution_generator(
                             except:
                                 charge_neutral = None  # Unknown
                         
-                        # Handle disordered sites if needed
-                        if not allow_multiple_occupancy:
+                        # Convert disordered structures to ordered if needed
+                        if not preserve_disorder:
                             # Check for disorder
                             has_disorder = any(len(site.species.keys()) > 1 for site in new_struct)
                             if has_disorder:
