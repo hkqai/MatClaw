@@ -116,6 +116,20 @@ python -m pytest tests/pymatgen/test_enumeration_generator.py -v
 
 ## Tools
 
+### URDF (Robotics)
+
+| Tool | Description |
+|---|---|
+| `urdf_validate` | Validate URDF robot models for Isaac Sim / USD compatibility |
+| `urdf_fix` | Automatically fix common URDF errors for Isaac Sim / USD compatibility |
+| `urdf_inspect` | Inspect and analyze URDF structure: kinematic tree, mass distribution, mesh files, materials, joint breakdown |
+
+### Lula (Robotics)
+
+| Tool | Description |
+|---|---|
+| `lula_generate_robot_description` | Generate Lula robot description with automatic collision-sphere placement for NVIDIA Isaac Sim |
+
 ### Pubchem Data Retrieval
 
 | Tool | Description |
@@ -143,6 +157,12 @@ python -m pytest tests/pymatgen/test_enumeration_generator.py -v
 | `ase_get_atoms` | Retrieve full Atoms objects from the database |
 | `ase_list_databases` | List and summarize ASE .db files in a directory |
 
+### Composition Generation
+
+| Tool | Description |
+|---|---|
+| `composition_enumerator` | Enumerate charge-balanced compositions from element lists for composition-space exploration |
+
 ### Pymatgen Candidate Generation
 
 | Tool | Description |
@@ -156,41 +176,6 @@ python -m pytest tests/pymatgen/test_enumeration_generator.py -v
 | `pymatgen_defect_generator` | Generate point defect supercells (vacancies, substitutions, interstitials) |
 | `pymatgen_sqs_generator` | Generate special quasirandom structures (SQS) for alloy modeling |
 
-### Composition Generation
-
-| Tool | Description |
-|---|---|
-| `composition_enumerator` | Enumerate charge-balanced compositions from element lists for composition-space exploration |
-
-### ML Prediction
-
-| Tool | Description |
-|---|---|
-| `ml_relax_structure` | Relax crystal structures using M3GNet universal ML potential |
-| `ml_predict_bandgap` | Predict band gap using pre-trained MEGNet model |
-| `ml_predict_eform` | Predict formation energy using pre-trained MEGNet model |
-
-### Synthesis Planning
-
-| Tool | Description |
-|---|---|
-| `synthesis_recipe_quantifier` | Extract and quantify synthesis parameters from text recipes |
-| `template_route_generator` | Generate template-based synthesis routes for inorganic materials |
-
-### URDF (Robotics)
-
-| Tool | Description |
-|---|---|
-| `urdf_validate` | Validate URDF robot models for Isaac Sim / USD compatibility |
-| `urdf_fix` | Automatically fix common URDF errors for Isaac Sim / USD compatibility |
-| `urdf_inspect` | Inspect and analyze URDF structure: kinematic tree, mass distribution, mesh files, materials, joint breakdown |
-
-### Lula (Robotics)
-
-| Tool | Description |
-|---|---|
-| `lula_generate_robot_description` | Generate Lula robot description with automatic collision-sphere placement for NVIDIA Isaac Sim |
-
 ### Analysis
 
 | Tool | Description |
@@ -200,6 +185,48 @@ python -m pytest tests/pymatgen/test_enumeration_generator.py -v
 | `structure_analyzer` | Extract structure-based ML features (coordination, packing, RDF) |
 | `stability_analyzer` | Analyze thermodynamic stability (formation energy, hull distance) |
 | `structure_fingerprinter` | Generate structural fingerprints (SOAP, MBTR, Sine/Coulomb matrices) |
+
+### ML Prediction
+
+| Tool | Description |
+|---|---|
+| `ml_relax_structure` | Relax crystal structures using M3GNet universal ML potential |
+| `ml_predict_bandgap` | Predict band gap using pre-trained MEGNet model |
+| `ml_predict_eform` | Predict formation energy using pre-trained MEGNet model |
+
+### ChemLLM
+
+| Tool | Description |
+|---|---|
+| `predict_molecule_binding` | Predict molecule-target binding label with fine-tuned LLM |
+| `predict_molecule_synthesizability` | Predict molecule synthesizability with fine-tuned LLM |
+
+### Selection & Ranking
+
+| Tool | Description |
+|---|---|
+| `multi_objective_ranker` | Multi-objective optimization (Pareto, weighted sum, constraint-based) |
+
+### ORCA (Quantum Chemistry)
+
+| Tool | Description |
+|---|---|
+| `orca_analysis_tools` | Parse and summarize ORCA output files (energies, HOMO/LUMO, frequencies) |
+| `orca_cube_tools` | Generate molecular orbital, electron density, and ESP cube files from ORCA calculations |
+
+### Synthesis Planning
+
+| Tool | Description |
+|---|---|
+| `synthesis_recipe_quantifier` | Extract and quantify synthesis parameters from text recipes |
+| `template_route_generator` | Generate template-based synthesis routes for inorganic materials |
+
+### ElemwiseRetro
+
+| Tool | Description |
+|---|---|
+| `er_predict_precursors` | Predict optimal synthesis precursors for inorganic materials |
+| `er_predict_temperature` | Predict synthesis temperature given target and precursor set |
 
 ### ARROWS
 
@@ -223,20 +250,6 @@ python -m pytest tests/pymatgen/test_enumeration_generator.py -v
 |---|---|
 | `xrd_analyze_pattern` | Automated XRD phase identification using autoXRD deep learning model |
 
-### ChemLLM
-
-| Tool | Description |
-|---|---|
-| `predict_molecule_binding` | Predict molecule-target binding label with fine-tuned LLM (1 active / 0 inactive) |
-| `predict_molecule_synthesizability` | Predict molecule synthesizability with fine-tuned LLM (1 yes / 0 no / 2 unknown) |
-
-### Element-wise Retrosynthesis
-
-| Tool | Description |
-|---|---|
-| `er_predict_precursors` | Predict optimal synthesis precursors for inorganic materials |
-| `er_predict_temperature` | Predict synthesis temperature given target and precursor set |
-
 ### Image Retrieval
 
 | Tool | Description |
@@ -244,16 +257,3 @@ python -m pytest tests/pymatgen/test_enumeration_generator.py -v
 | `paper_image_extract` | Extract figures and images from scientific papers (PDF) |
 | `image_segmentation` | Segment images into regions using ML models |
 | `sem_image_classification` | Classify SEM images by morphology or composition |
-
-### ORCA (Quantum Chemistry)
-
-| Tool | Description |
-|---|---|
-| `orca_analysis_tools` | Parse and summarize ORCA output files (energies, HOMO/LUMO, frequencies) |
-| `orca_cube_tools` | Generate molecular orbital, electron density, and ESP cube files from ORCA calculations |
-
-### Selection & Ranking
-
-| Tool | Description |
-|---|---|
-| `multi_objective_ranker` | Multi-objective optimization (Pareto, weighted sum, constraint-based) |

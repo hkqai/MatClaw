@@ -1,7 +1,6 @@
 ---
-name: vasp_ase
+name: vasp-ase
 description: Professional skill for setting up, executing, and debugging VASP DFT calculations using the Atomic Simulation Environment (ASE).
-version: 1.0.0
 ---
 
 # VASP ASE Skill
