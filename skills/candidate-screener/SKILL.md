@@ -92,8 +92,8 @@ Analyzes elemental composition, oxidation states, and chemical properties.
 Predicts whether a composition is likely thermodynamically stable using Materials Project phase diagram.
 
 **Key parameters:**
-- `structure`: pymatgen Structure dict/string, or just `composition="LiFePO4"`
-- `energy_tolerance`: eV/atom above convex hull to consider "metastable" (default 0.1)
+- `input_structure`: pymatgen Structure dict/string, or just composition string (e.g., "LiFePO4")
+- `hull_tolerance`: eV/atom above convex hull to consider "metastable" (default 0.1)
 
 **Returns:**
 ```python
@@ -376,18 +376,20 @@ Store computed/predicted properties in ASE database for future reuse.
 
 **Key parameters:**
 - `db_path`: path to ASE database
-- `structure`: pymatgen Structure dict
-- `properties`: dict of property name→value pairs
-- `calculator`: name of calculator/method used (e.g., `"ML_M3GNet"`, `"Materials_Project"`)
-- `metadata`: optional additional info
+- `atoms_dict`: serialized ASE Atoms object (dict with 'numbers', 'positions', 'cell' keys)
+- `results`: (optional) calculator results dict with energy, forces, stress, etc.
+- `key_value_pairs`: (optional) metadata dict for campaign_id, method, formula, properties, etc.
+- `unique_key`: (optional) unique identifier to avoid duplicates
+- `data`: (optional) additional arbitrary data
 
 **Returns:**
 ```python
 {
   "success": True,
-  "entry_id": 143,
+  "row_id": 143,
   "db_path": "/path/to/screening_run_2024.db",
-  "formula": "LiFePO4"
+  "formula": "LiFePO4",
+  "updated": False
 }
 ```
 
@@ -507,10 +509,7 @@ STORE db_path for subsequent calls
 **Step 1.1:** Validate structure integrity
 ```
 CALL structure_validator(
-    structure=candidate.structure,
-    check_composition=True,
-    check_charge_neutrality=True,
-    check_geometry=True
+    input_structure=candidate.structure,
 )
 
 IF result.is_valid == False:
@@ -524,9 +523,7 @@ ELSE:
 **Step 1.2:** Analyze chemical composition
 ```
 CALL composition_analyzer(
-    structure=candidate.structure,
-    analyze_oxidation=True,
-    compute_descriptors=True
+    input_structure=candidate.structure,
 )
 
 STORE result.elements in candidate.elements
@@ -540,8 +537,8 @@ IF result.warnings contains critical issues (radioactive, exotic):
 **Step 1.3:** (OPTIONAL) Check thermodynamic stability
 ```
 CALL stability_analyzer(
-    structure=candidate.structure,
-    energy_tolerance=0.1
+    input_structure=candidate.structure,
+    hull_tolerance=0.1
 )
 
 IF result.stability_category == "unstable" AND result.energy_above_hull > 0.3:
@@ -553,9 +550,7 @@ IF result.stability_category == "unstable" AND result.energy_above_hull > 0.3:
 **Step 1.4:** Extract structural features
 ```
 CALL structure_analyzer(
-    structure=candidate.structure,
-    compute_symmetry=True,
-    analyze_coordination=True
+    input_structure=candidate.structure,
 )
 
 STORE result.spacegroup in candidate.spacegroup
@@ -627,10 +622,13 @@ IF result.success AND result.count > 0:
     # Cache in ASE database for future runs
     CALL ase_store_result(
         db_path=db_path,
-        structure=candidate.structure,
-        properties=candidate.properties,
-        calculator="Materials_Project",
-        metadata={"material_id": mp_entry.material_id}
+        atoms_dict=candidate.structure,  # Must be ASE atoms dict format
+        results=candidate.properties,  # Energy, forces, etc. if available
+        key_value_pairs={
+            "material_id": mp_entry.material_id,
+            "source": "Materials_Project",
+            "formula": candidate.formula
+        }
     )
     
     APPEND candidate to candidates_with_properties
@@ -738,10 +736,13 @@ SET candidate.confidence = "medium"
 # Cache results in ASE database for future runs
 CALL ase_store_result(
     db_path=db_path,
-    structure=candidate.structure,
-    properties=candidate.properties,
-    calculator="ML_M3GNet/MEGNet",
-    metadata={"models": [properties.eform_model, properties.bandgap_model]}
+    atoms_dict=candidate.structure,  # Must be ASE atoms dict format
+    results=candidate.properties,  # Energy, band_gap, etc.
+    key_value_pairs={
+        "source": "ML_M3GNet/MEGNet",
+        "formula": candidate.formula,
+        "models": [properties.eform_model, properties.bandgap_model]
+    }
 )
 
 APPEND candidate to candidates_with_properties
