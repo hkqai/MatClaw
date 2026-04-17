@@ -186,7 +186,7 @@ def pymatgen_enumeration_generator(
         }
 
     # Validate parameters
-    valid_formats = {"dict", "poscar", "cif", "json"}
+    valid_formats = {"dict", "poscar", "cif", "json", "ase"}
     if output_format not in valid_formats:
         return {
             "success": False,
@@ -445,6 +445,14 @@ def _append_result(
         elif output_format == "json":
             import json
             formatted = json.dumps(ordered_struct.as_dict())
+        elif output_format == "ase":
+            # Convert to ASE-compatible format
+            formatted = {
+                "numbers": [site.specie.Z for site in ordered_struct.sites],
+                "positions": [site.coords.tolist() for site in ordered_struct.sites],
+                "cell": ordered_struct.lattice.matrix.tolist(),
+                "pbc": [True, True, True]
+            }
         else:
             warnings.append(f"Unknown output_format '{output_format}' — skipping structure.")
             return

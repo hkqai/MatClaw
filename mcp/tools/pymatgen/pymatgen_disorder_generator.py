@@ -189,7 +189,7 @@ def pymatgen_disorder_generator(
         }
 
     # Validate output_format
-    valid_formats = {"dict", "poscar", "cif", "json"}
+    valid_formats = {"dict", "poscar", "cif", "json", "ase"}
     if output_format not in valid_formats:
         return {
             "success": False,
@@ -446,6 +446,14 @@ def pymatgen_disorder_generator(
                 output_struct = str(cif_writer)
             elif output_format == "json":
                 output_struct = json.dumps(disordered_struct.as_dict())
+            elif output_format == "ase":
+                # Convert to ASE-compatible format
+                output_struct = {
+                    "numbers": [site.specie.Z for site in disordered_struct.sites],
+                    "positions": [site.coords.tolist() for site in disordered_struct.sites],
+                    "cell": disordered_struct.lattice.matrix.tolist(),
+                    "pbc": [True, True, True]
+                }
         except Exception as e:
             return {
                 "success": False,
