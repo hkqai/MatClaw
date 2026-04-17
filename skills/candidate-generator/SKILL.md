@@ -6,8 +6,8 @@ description: Generate inorganic crystal structure candidates for computational m
 # Inorganic Candidate Generation
 
 This skill guides the systematic generation of inorganic crystal structure candidates using
-a suite of ten tools (3 composition discovery + 7 structure generation). The methodology is:
-**discover compositions → prototype → explore chemistry → resolve disorder → add defects → augment**,
+a suite of tools for composition discovery and structure generation. The methodology is:
+**discover compositions → prototype → explore chemistry → add disorder → resolve disorder → add defects → augment**,
 selecting the appropriate branch(es) for the discovery goal.
 
 The core philosophy: candidate generation is a funnel. Start broad (many compositions,
@@ -202,26 +202,38 @@ lattice parameters.
 
 ---
 
-### 2. `pymatgen_substitution_generator` — Chemical Space Exploration
-Replaces elements in existing structures. Best for isostructural analogue screening across
-a fixed lattice topology when **charge balance is not strictly required**.
+### 2. `pymatgen_substitution_generator` — Ordered Enumeration of Site Replacements
+Replaces elements in existing structures by FULLY replacing specific sites, generating ORDERED
+structures with integer occupancy. Best for isostructural analogue screening across a fixed
+lattice topology.
+
+**CRITICAL: This tool creates ORDERED structures, NOT fractional occupancy.**
+- `fraction=0.15` means "fully replace 15% of sites" (1 site out of 6 → integer occupancy)
+- Output: Multiple ordered variants where specific sites are 100% replaced
+- Example: `{'Ni': {'replace_with': 'Mn', 'fraction': 0.2}}` with 5 Ni sites generates
+  5 structures, each with 1 different Ni site fully replaced by Mn
+- For fractional occupancy (80% Ni + 20% Mn on same site), use `pymatgen_disorder_generator`
 
 **Key parameters:**
 - `substitutions`: `{'Li': 'Na'}` (full swap), `{'Li': ['Na', 'K']}` (one variant per replacement),
-  `{'Li': {'replace_with': 'Na', 'fraction': 0.5}}` (50 % doping)
+  `{'Li': {'replace_with': 'Na', 'fraction': 0.5}}` (FULLY replace 50% of Li sites, not partial occupancy)
 - `n_structures`: variants to generate **per substitution combination** (default 5).
   For deterministic full swaps (`fraction=1.0`) set this to **1** — higher values only
-  produce identical duplicates. Total output = `n_structures × num_combinations`,
-  capped by `max_attempts`.
+  produce identical duplicates. For partial site replacement (`fraction < 1.0`), generates
+  different random orderings. Total output = `n_structures × num_combinations`, capped by `max_attempts`.
 - `max_attempts`: **hard cap on total output count** (default 50). If you supply N
   substitution options with n_structures=k, set `max_attempts ≥ N × k` or outputs
   will be silently truncated. Example: 8 B-site metals with n_structures=1 needs
   `max_attempts=8` (or higher); with n_structures=3 needs `max_attempts=24`.
 - `enforce_charge_neutrality`: set `True` for ionic materials
 - `site_selector`: `'all'`, `'wyckoff_4a'`, `'coordination_6'`, etc.
+- `preserve_disorder`: preserves existing disorder in inputs (does NOT create fractional occupancy)
 
 **When to use over `ion_exchange_generator`:** when you want exploratory doping without
 strict stoichiometry adjustment and charge neutrality is handled manually or checked post-hoc.
+
+**When to use over `disorder_generator`:** when you need ordered enumerated configurations
+for exhaustive DFT calculations or supercell enumeration, NOT for creating statistical disorder.
 
 ---
 
@@ -237,6 +249,120 @@ so that total ionic charge is conserved. Only charge-neutral structures are retu
 - `max_structures`: cap on returned structures per input (default 10)
 
 **Prototypical use cases:** Li → Na/K battery cathode analogues, Ca²⁺ → La³⁺ doping in oxides.
+
+---
+
+### 3A. `pymatgen_disorder_generator` — Add Configurational Disorder (Order → Disorder)
+***** REQUIRED TOOL FOR FRACTIONAL SITE OCCUPANCY *****
+
+Converts **fully ordered structures** into disordered structures with FRACTIONAL site occupancies.
+This is the ONLY tool for creating partial substitution materials like Li[Ni₀.₈Mn₀.₂]O₂ where
+ALL sites of an element have mixed occupancy (e.g., every Ni site becomes 80% Ni + 20% Mn).
+
+**CRITICAL: This tool creates FRACTIONAL OCCUPANCY, not ordered enumeration.**
+- Creates structures where sites have partial occupancy (e.g., 80% Ni + 20% Mn on same site)
+- Output: Single disordered structure per input with fractional composition
+- Example: `{'Ni': {'Ni': 0.8, 'Mn': 0.2}}` creates Li₃[Ni₂.₄Mn₀.₆]O₆ (statistical disorder)
+- For ordered enumerated configurations, use `pymatgen_substitution_generator` instead
+
+This is the inverse of enumeration: creates the disordered input structures needed for SQS
+generation or systematic enumeration.
+
+**Key parameters:**
+- `site_substitutions`: dict mapping elements to their disordered (fractional) occupancies
+  - Format: `{element: {species1: fraction1, species2: fraction2, ...}}`
+  - Binary mixing: `{'Ni': {'Ni': 0.8, 'Mn': 0.2}}` — Li[Ni₀.₈Mn₀.₂]O₂
+  - Ternary mixing: `{'Co': {'Ni': 0.333, 'Mn': 0.333, 'Co': 0.334}}` — NMC
+  - Fractions must sum to 1.0 (±`composition_tolerance`)
+- `site_selector`: strategy for which sites receive disorder (default: `'all_equivalent'`)
+  - `'all_equivalent'`: apply to all symmetry-equivalent sites (recommended)
+  - `'wyckoff_4a'`: specific Wyckoff position
+  - `'first_site'`: only first occurrence (breaks symmetry, use with caution)
+- `validate_charge_neutrality`: `True` (default) — warns if disorder creates charge imbalance
+- `composition_tolerance`: tolerance for fraction sums (default 0.01 = 1%)
+
+**Typical workflow:**
+```python
+# Step 1: Get ordered structure from Materials Project
+mp_result = mp_get_material_properties(
+    material_ids=["mp-1097088"],  # LiNiO₂
+    properties=["structure"]
+)
+
+# Step 2: Add disorder for partial substitution Li[Ni₀.₈Mn₀.₂]O₂
+disordered = pymatgen_disorder_generator(
+    input_structures=mp_result["properties"][0]["structure"],
+    site_substitutions={"Ni": {"Ni": 0.8, "Mn": 0.2}}  # 80% Ni, 20% Mn on TM sites
+)
+
+# Step 3: Generate SQS for DFT calculations
+sqs = pymatgen_sqs_generator(
+    input_structures=disordered["structures"],
+    supercell_size=16,
+    n_structures=3
+)
+```
+
+**Use cases:**
+- Battery cathodes: Li[Ni₀.₈Mn₀.₂]O₂, Li[Ni₀.₆Mn₀.₂Co₀.₂]O₂ (NMC622), (Li,Na)CoO₂
+- Perovskite oxides: La[Mn₀.₇Fe₀.₃]O₃, (Ca,Sr)TiO₃
+- High-entropy materials: (Mg,Co,Ni,Cu,Zn)O with equimolar mixing
+- Doped semiconductors: Si_{1-x}Ge_x, Al_xGa_{1-x}N
+- Mixed anion systems: Li₂O_{1-x}F_x
+
+**When to use:** When you have an ordered parent structure (from MP or prototype) and need
+to model a specific composition with fractional occupancies. Output is deterministic (one
+disordered structure per input) and ready for SQS or enumeration.
+
+---
+
+### 3B. Tool Selection: `disorder_generator` vs `substitution_generator`
+
+**The Critical Distinction:**
+
+| Aspect | `pymatgen_disorder_generator` | `pymatgen_substitution_generator` |
+|--------|-------------------------------|-----------------------------------|
+| **Output type** | Fractional occupancy (statistical disorder) | Integer occupancy (ordered enumeration) |
+| **Site occupancy** | Multiple species on same site with fractions summing to 1 | Single species per site (occu=1) |
+| **Example** | Site has 80% Ni + 20% Mn | Site 1 has 100% Mn, Sites 2-5 have 100% Ni |
+| **Formula** | Li₃[Ni₂.₄Mn₀.₆]O₆ (fractional) | LiNi₄MnO₁₀ (integer, ordered) |
+| **Output count** | 1 disordered structure per input | Multiple ordered configurations per input |
+| **Use for** | SQS generation, VCA calculations, statistical models | Supercell enumeration, exhaustive DFT, specific orderings |
+
+**Decision Tree:**
+
+```
+Do you need partial substitution like Li[Ni₀.₈Mn₀.₂]O₂?
+├─ YES: Do you want fractional occupancy (every site has 80%Ni+20%Mn)?
+│  ├─ YES → Use `pymatgen_disorder_generator`
+│  │         site_substitutions={'Ni': {'Ni': 0.8, 'Mn': 0.2}}
+│  │         → Output: 1 structure with fractional occupancy
+│  │         → Then: pymatgen_sqs_generator for quasirandom supercells
+│  │
+│  └─ NO: Want ordered enumeration (1 specific Ni replaced per structure)?
+│     └─ YES → Use `pymatgen_substitution_generator`
+│               substitutions={'Ni': {'replace_with': 'Mn', 'fraction': 0.2}}
+│               → Output: 5 structures, each with different Ni site replaced
+│               → Then: Run DFT on each ordered configuration
+│
+└─ NO: Complete substitution (all Li → Na)?
+   └─ Use `pymatgen_substitution_generator`
+      substitutions={'Li': 'Na'}
+      → Output: 1 structure with all Li replaced by Na
+```
+
+**Common Pitfalls:**
+- ❌ Using `substitution_generator` with `fraction=0.15` expecting fractional occupancy
+  - Result: Ordered structure with 1 site fully replaced, not statistical disorder
+- ❌ Using `disorder_generator` when you want to explore specific orderings
+  - Result: Single averaged structure, cannot enumerate configurational space
+- ❌ Setting `preserve_disorder=True` in `substitution_generator` expecting it to create disorder
+  - Result: Only preserves existing disorder, does not create new fractional occupancy
+
+**Research examples:**
+- Li[Ni₀.₈Mn₀.₂]O₂ battery cathode → `disorder_generator` → `sqs_generator`
+- La[Mn₁₋ₓFeₓ]O₃ perovskite (x=0.1-0.5) → `disorder_generator`
+- Screening A-site metals in ABO₃ perovskites → `substitution_generator` with `['Ca','Sr','Ba']`
 
 ---
 
@@ -1580,18 +1706,24 @@ Fix: Always set `max_attempts = n_structures × len(substitution_options)` expli
 Also set `n_structures=1` for deterministic full swaps (fraction=1.0) — higher values
 just add identical duplicates and inflate the attempt count unnecessarily.
 
-**`substitution_generator` fractional doping silently becomes a full swap on single-site cells**
-Cause: `fraction=0.5` on a sublattice with only one site cannot produce a partial occupancy
-(you cannot remove half an atom). The tool falls back to replacing the whole site, returning
-the same result as `fraction=1.0` with no warning.
-Symptom: The output formula shows a complete element swap even though `fraction < 1.0` was
-requested; the output is an ordered structure, not a disordered one.
-Fix: Ensure the input cell has **≥ 2 sites of the target species** before using fractional
-substitution. For a single-site primitive cell (e.g. a 5-atom perovskite with one B-site),
-either (a) build a supercell first so multiple target sites exist, or (b) manually construct
-the disordered structure dict with explicit partial occupancies
-(`{"element": "Fe", "occu": 0.5}, {"element": "Co", "occu": 0.5}` on the same site)
-and pass it directly to `sqs_generator` or `enumeration_generator`.
+**`substitution_generator` does NOT create fractional occupancy**
+Cause: `substitution_generator` is designed to enumerate ORDERED structures, not create
+statistical disorder. Using `fraction=0.5` fully replaces 50% of specific sites (integer occupancy),
+it does NOT create 50% partial occupancy on each site.
+Symptom: Output has integer occupancy (occu=1) on all sites; formula shows ordered composition
+(e.g., LiNi₄MnO₁₀) not fractional (e.g., Li₃[Ni₂.₄Mn₀.₆]O₆); requesting fractional
+substitution with `fraction < 1.0` returns multiple ordered variants, not disordered structures.
+Fix: **Use `pymatgen_disorder_generator` for fractional site occupancy.**
+```python
+# ❌ WRONG: This creates ordered structures with specific sites replaced
+substitution_generator(substitutions={'Ni': {'replace_with': 'Mn', 'fraction': 0.2}})
+# Output: 5 structures, each with 1 different Ni site fully replaced by Mn
+
+# ✅ CORRECT: This creates fractional occupancy on ALL Ni sites
+disorder_generator(site_substitutions={'Ni': {'Ni': 0.8, 'Mn': 0.2}})
+# Output: 1 structure where every Ni site has 80% Ni + 20% Mn occupancy
+```
+For partial substitution materials like Li[Ni₀.₈Mn₀.₂]O₂, always use `disorder_generator`.
 
 **`ion_exchange_generator` returns zero structures**
 Cause: No charge-neutral solution exists at the requested stoichiometry.
@@ -1624,7 +1756,9 @@ ATAT and set `use_mcsqs=True`.
 | Task | Tool | Critical parameters |
 |------|------|---------------------|
 | Build from spacegroup | `prototype_builder` | `spacegroup`, `species`, `lattice_parameters` |
-| Isostructural analogues | `substitution_generator` | `substitutions`, `n_structures` |
+| **Fractional occupancy** (Li[Ni₀.₈Mn₀.₂]O₂) | **`disorder_generator`** | `site_substitutions={'Ni': {'Ni': 0.8, 'Mn': 0.2}}` |
+| **Ordered enumeration** (screen 5 TM-site orderings) | **`substitution_generator`** | `substitutions={'Ni': {'replace_with': 'Mn', 'fraction': 0.2}}`, `n_structures=5` |
+| Isostructural analogues | `substitution_generator` | `substitutions={'Li': ['Na','K']}`, `n_structures=1` |
 | Charge-neutral ion swap | `ion_exchange_generator` | `replace_ion`, `with_ions`, `exchange_fraction` |
 | Enumerate all orderings | `enumeration_generator` | `supercell_size ≤ 2`, `sort_by='ewald'` |
 | Best quasirandom cell | `sqs_generator` | `supercell_size`, `n_mc_steps`, `n_structures` |

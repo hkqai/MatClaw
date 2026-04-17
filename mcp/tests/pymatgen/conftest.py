@@ -142,3 +142,76 @@ def disordered_li_na_cl_obj():
         [{"Li": 0.5, "Na": 0.5}, "Cl"],
         [[0.0, 0.0, 0.0], [0.5, 0.5, 0.5]],
     )
+
+
+@pytest.fixture
+def ordered_cucr2se4():
+    """
+    Ordered CuCr₂Se₄ spinel structure for disorder generator testing.
+    
+    Simplified spinel-like structure with Cu on tetrahedral sites,
+    Cr on octahedral sites, and Se on anion sites.
+    
+    Returns:
+        dict: Fully ordered Structure.as_dict()
+    """
+    from pymatgen.core import Structure, Lattice
+    
+    # Cubic spinel-like lattice
+    lattice = Lattice.cubic(10.0)
+    structure = Structure(
+        lattice,
+        ["Cu", "Cu", "Cr", "Cr", "Cr", "Cr", "Se", "Se", "Se", "Se",
+         "Se", "Se", "Se", "Se"],
+        [
+            [0.125, 0.125, 0.125],  # Cu tetrahedral
+            [0.875, 0.875, 0.875],  # Cu tetrahedral
+            [0.5, 0.5, 0.5],        # Cr octahedral
+            [0.5, 0.0, 0.0],        # Cr octahedral
+            [0.0, 0.5, 0.0],        # Cr octahedral
+            [0.0, 0.0, 0.5],        # Cr octahedral
+            [0.25, 0.25, 0.25],     # Se
+            [0.75, 0.75, 0.25],     # Se
+            [0.75, 0.25, 0.75],     # Se
+            [0.25, 0.75, 0.75],     # Se
+            [0.75, 0.75, 0.75],     # Se
+            [0.25, 0.25, 0.75],     # Se
+            [0.25, 0.75, 0.25],     # Se
+            [0.75, 0.25, 0.25],     # Se
+        ]
+    )
+    return structure.as_dict()
+
+
+@pytest.fixture
+def ordered_cucr2se4_obj():
+    """
+    Same as ordered_cucr2se4 but returns the pymatgen Structure object.
+    
+    Returns:
+        Structure: Fully ordered CuCr₂Se₄ spinel Structure object
+    """
+    from pymatgen.core import Structure, Lattice
+    
+    lattice = Lattice.cubic(10.0)
+    return Structure(
+        lattice,
+        ["Cu", "Cu", "Cr", "Cr", "Cr", "Cr", "Se", "Se", "Se", "Se",
+         "Se", "Se", "Se", "Se"],
+        [
+            [0.125, 0.125, 0.125],
+            [0.875, 0.875, 0.875],
+            [0.5, 0.5, 0.5],
+            [0.5, 0.0, 0.0],
+            [0.0, 0.5, 0.0],
+            [0.0, 0.0, 0.5],
+            [0.25, 0.25, 0.25],
+            [0.75, 0.75, 0.25],
+            [0.75, 0.25, 0.75],
+            [0.25, 0.75, 0.75],
+            [0.75, 0.75, 0.75],
+            [0.25, 0.25, 0.75],
+            [0.25, 0.75, 0.25],
+            [0.75, 0.25, 0.25],
+        ]
+    )

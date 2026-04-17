@@ -1,6 +1,6 @@
 ---
 name: synthesis-planner
-description: Intelligent synthesis route planning for inorganic materials. ALWAYS tries literature search first via Materials Project, only falls back to template-based routes when no literature data exists. Use this skill whenever the user needs a synthesis protocol - it enforces literature-first methodology.
+description: Intelligent synthesis route planning for inorganic materials. Use this skill whenever the user needs a synthesis protocol.
 ---
 
 # Synthesis Route Planning Skill

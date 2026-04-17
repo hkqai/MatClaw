@@ -152,7 +152,18 @@ def composition_enumerator(
                 "Default: 'atoms'."
             )
         )
-    ] = "atoms"
+    ] = "atoms",
+    skip_complexity_check: Annotated[
+        bool,
+        Field(
+            default=False,
+            description=(
+                "If True, bypasses computational complexity warnings and proceeds regardless. "
+                "Use with caution - high complexity enumerations may take minutes or hours. "
+                "Default: False (show warnings and abort if complexity too high)."
+            )
+        )
+    ] = False
 ) -> Dict[str, Any]:
     """
     Enumerate charge-balanced chemical compositions from element lists and oxidation states.
@@ -288,10 +299,45 @@ def composition_enumerator(
                 "error": "No anions (negative oxidation states) found. Need at least one anion."
             }
         
+        # Estimate computational complexity and warn if too high
+        complexity_result = _estimate_complexity(
+            num_cations=len(cations),
+            num_anions=len(anions),
+            max_formula_units=max_formula_units,
+            oxidation_states=oxidation_states,
+            cations=cations,
+            anions=anions
+        )
+        
+        warnings = []
+        
+        # Check if complexity is too high
+        if not skip_complexity_check:
+            if complexity_result['risk_level'] == 'CRITICAL':
+                return {
+                    "success": False,
+                    "error": (
+                        f"Computational complexity too high: {complexity_result['estimated_iterations']:,} estimated iterations. "
+                        f"Risk: {complexity_result['message']}. "
+                        f"Suggestions: {', '.join(complexity_result['suggestions'])}. "
+                        f"To proceed anyway, set skip_complexity_check=True."
+                    ),
+                    "complexity_estimate": complexity_result
+                }
+            elif complexity_result['risk_level'] == 'HIGH':
+                warnings.append(
+                    f"High complexity warning: ~{complexity_result['estimated_iterations']:,} iterations. "
+                    f"{complexity_result['message']}. Expected runtime: {complexity_result['expected_runtime']}."
+                )
+            elif complexity_result['risk_level'] == 'MODERATE':
+                warnings.append(
+                    f"Moderate complexity: ~{complexity_result['estimated_iterations']:,} iterations. "
+                    f"Expected runtime: {complexity_result['expected_runtime']}."
+                )
+        
         # Generate compositions
         compositions_set = set()  # Store as frozenset of (element, count, oxidation) tuples to deduplicate
         detailed_compositions = []  # Store full metadata
-        warnings = []
         
         # Enumerate cation combinations
         cation_elements = list(cations.keys())
@@ -449,6 +495,86 @@ def composition_enumerator(
             'success': False,
             'error': f"Composition enumeration failed: {str(e)}"
         }
+
+
+def _estimate_complexity(
+    num_cations: int,
+    num_anions: int,
+    max_formula_units: int,
+    oxidation_states: Dict[str, List[int]],
+    cations: Dict[str, List[int]],
+    anions: Dict[str, List[int]]
+) -> Dict[str, Any]:
+    """
+    Estimate computational complexity of enumeration.
+    
+    Returns risk assessment and suggestions for reducing complexity.
+    """
+    # Calculate average number of oxidation states per cation
+    avg_oxi_states = sum(len(states) for states in cations.values()) / max(len(cations), 1)
+    
+    # Estimate number of cation partitions
+    # Approximate: sum over fu in 1..max_fu of (fu + num_cations - 1) choose (num_cations - 1)
+    # Simplified upper bound: max_fu^num_cations
+    cation_partitions = max_formula_units ** num_cations
+    
+    # Estimate oxidation state combinations per partition
+    oxi_combinations = avg_oxi_states ** num_cations
+    
+    # Estimate anion enumeration cost (hardcoded limit of 30)
+    anion_cost = min(30, max_formula_units * 3) ** num_anions if num_anions > 1 else 30
+    
+    # Total estimated iterations
+    estimated_iterations = int(cation_partitions * oxi_combinations * anion_cost * 0.1)
+    
+    # Determine risk level
+    if estimated_iterations > 10_000_000:
+        risk_level = "CRITICAL"
+        message = "Enumeration would take several minutes to hours"
+        expected_runtime = ">5 minutes"
+    elif estimated_iterations > 1_000_000:
+        risk_level = "HIGH"
+        message = "Enumeration may take 30+ seconds"
+        expected_runtime = "30-300 seconds"
+    elif estimated_iterations > 100_000:
+        risk_level = "MODERATE"
+        message = "Enumeration may take several seconds"
+        expected_runtime = "5-30 seconds"
+    elif estimated_iterations > 10_000:
+        risk_level = "LOW"
+        message = "Enumeration should complete quickly"
+        expected_runtime = "<5 seconds"
+    else:
+        risk_level = "MINIMAL"
+        message = "Enumeration will be very fast"
+        expected_runtime = "<1 second"
+    
+    # Generate suggestions for reducing complexity
+    suggestions = []
+    if max_formula_units > 10:
+        suggestions.append(f"Reduce max_formula_units from {max_formula_units} to 8-10")
+    if num_cations > 4:
+        suggestions.append(f"Reduce number of cation types from {num_cations} to 3-4")
+    if avg_oxi_states > 2.5:
+        suggestions.append("Limit oxidation states to most common values only")
+    if num_anions > 2:
+        suggestions.append(f"Reduce number of anion types from {num_anions} to 1-2")
+    suggestions.append("Set max_atoms_per_formula to a lower value (e.g., 20)")
+    suggestions.append("Use require_all_elements=False to allow subsets")
+    
+    return {
+        "estimated_iterations": estimated_iterations,
+        "risk_level": risk_level,
+        "message": message,
+        "expected_runtime": expected_runtime,
+        "suggestions": suggestions,
+        "parameters": {
+            "num_cations": num_cations,
+            "num_anions": num_anions,
+            "max_formula_units": max_formula_units,
+            "avg_oxi_states_per_cation": round(avg_oxi_states, 2)
+        }
+    }
 
 
 def _generate_integer_partitions(n: int, num_parts: int) -> List[Tuple[int, ...]]:
