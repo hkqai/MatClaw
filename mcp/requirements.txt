@@ -24,6 +24,7 @@ pubchempy>=1.0.0
 mp-api>=0.46.0
 pymatgen>=2026.3.23
 matgl>=2.1.1
+matcalc>=0.4.5
 matminer>=0.9.0
 ase>=3.28.0
 dscribe>=2.1.2

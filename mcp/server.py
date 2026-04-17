@@ -55,6 +55,9 @@ from tools.matgl import (
     matgl_predict_bandgap,
     matgl_predict_eform
 )
+from tools.matcalc import (
+    matcalc_calc_elasticity,
+)
 from tools.chem_llm import (
     predict_molecule_binding,
     predict_molecule_synthesizability,
@@ -153,6 +156,9 @@ mcp.tool()(structure_fingerprinter)
 mcp.tool()(matgl_relax_structure)
 mcp.tool()(matgl_predict_bandgap)
 mcp.tool()(matgl_predict_eform)
+
+# Material property calculation tools
+mcp.tool()(matcalc_calc_elasticity)
 
 # Fine-tuned LLM prediction tools
 mcp.tool()(predict_molecule_binding)
