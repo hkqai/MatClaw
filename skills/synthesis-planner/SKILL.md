@@ -407,7 +407,7 @@ IF no valid ml_temperature:
 ```
 SET ml_route = {
     "method": "solid_state",
-    "source": "ml_prediction",
+    "source": "matgl",
     "confidence": ml_precursors.top_prediction.confidence,  # 0.2-0.8 typical
     "precursors": [
         {"compound": prec, "form": infer_form(prec)}
@@ -458,7 +458,7 @@ for i, alt in enumerate(ml_precursors.precursor_sets[1:3], 2):
 ```
 RETURN {
     "success": True,
-    "source": "ml_prediction",
+    "source": "matgl",
     "confidence": "medium",
     "routes": [ml_route],
     "requires_review": "recommended",
@@ -713,7 +713,7 @@ ml_temperature = er_predict_temperature(
 # Step 4: Format ML-based route
 ml_route = {
     "method": "solid_state",
-    "source": "ml_prediction",
+    "source": "matgl",
     "confidence": 0.61,
     "precursors": [
         {"compound": "Li2CO3", "form": "carbonate"},

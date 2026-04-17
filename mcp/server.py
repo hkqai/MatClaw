@@ -50,10 +50,10 @@ from tools.analysis import (
     stability_analyzer,
     structure_fingerprinter,
 )
-from tools.ml_prediction import (
-    ml_relax_structure,
-    ml_predict_bandgap,
-    ml_predict_eform
+from tools.matgl import (
+    matgl_relax_structure,
+    matgl_predict_bandgap,
+    matgl_predict_eform
 )
 from tools.chem_llm import (
     predict_molecule_binding,
@@ -150,9 +150,9 @@ mcp.tool()(stability_analyzer)
 mcp.tool()(structure_fingerprinter)
 
 # Machine learning prediction tools
-mcp.tool()(ml_relax_structure)
-mcp.tool()(ml_predict_bandgap)
-mcp.tool()(ml_predict_eform)
+mcp.tool()(matgl_relax_structure)
+mcp.tool()(matgl_predict_bandgap)
+mcp.tool()(matgl_predict_eform)
 
 # Fine-tuned LLM prediction tools
 mcp.tool()(predict_molecule_binding)

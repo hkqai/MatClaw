@@ -16,7 +16,7 @@ from typing import Dict, Any, Optional, Union, Annotated, Literal
 from pydantic import Field
 
 
-def ml_predict_eform(
+def matgl_predict_eform(
     input_structure: Annotated[
         Union[Dict[str, Any], str],
         Field(

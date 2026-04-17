@@ -1,11 +1,11 @@
 """
-Tests for ml_relax_structure tool.
+Tests for matgl_relax_structure tool.
 
-Run with: pytest tests/ml_prediction/test_ml_relax_structure.py -v
+Run with: pytest tests/matgl/test_matgl_relax_structure.py -v
 """
 
 import pytest
-from tools.ml_prediction.ml_relax_structure import ml_relax_structure
+from tools.matgl.matgl_relax_structure import matgl_relax_structure
 
 
 class TestMLRelaxStructure:
@@ -23,7 +23,7 @@ class TestMLRelaxStructure:
             [[0, 0, 0], [0.5, 0.5, 0.5]]
         )
         
-        result = ml_relax_structure(
+        result = matgl_relax_structure(
             input_structure=struct.as_dict(),
             model="TensorNet-MatPES-PBE-v2025.1-PES",
             relax_cell=True,
@@ -56,7 +56,7 @@ class TestMLRelaxStructure:
             [[0.01, 0.01, 0.01], [0.51, 0.51, 0.51]]  # Slightly displaced
         )
         
-        result = ml_relax_structure(
+        result = matgl_relax_structure(
             input_structure=struct.as_dict(),
             model="TensorNet-MatPES-PBE-v2025.1-PES",
             relax_cell=False,  # Fixed cell
@@ -94,7 +94,7 @@ Cs1 Cs 0.0 0.0 0.0 1.0
 Cl1 Cl 0.5 0.5 0.5 1.0
 """
         
-        result = ml_relax_structure(
+        result = matgl_relax_structure(
             input_structure=cif_string,
             model="TensorNet-MatPES-PBE-v2025.1-PES",
             fmax=0.05,
@@ -118,7 +118,7 @@ Cl1 Cl 0.5 0.5 0.5 1.0
             [[0, 0, 0], [0.5, 0.5, 0.5]]
         )
         
-        result = ml_relax_structure(
+        result = matgl_relax_structure(
             input_structure=struct.as_dict(),
             model="TensorNet-MatPES-PBE-v2025.1-PES",
             fmax=0.05,
@@ -144,7 +144,7 @@ Cl1 Cl 0.5 0.5 0.5 1.0
             [[0, 0, 0], [0.5, 0.5, 0.5]]
         )
         
-        result = ml_relax_structure(
+        result = matgl_relax_structure(
             input_structure=struct.as_dict(),
             model="TensorNet-MatPES-PBE-v2025.1-PES",
             fmax=0.05,
@@ -173,7 +173,7 @@ Cl1 Cl 0.5 0.5 0.5 1.0
         )
         
         for model in ["TensorNet-MatPES-PBE-v2025.1-PES", "TensorNet-MatPES-r2SCAN-v2025.1-PES"]:
-            result = ml_relax_structure(
+            result = matgl_relax_structure(
                 input_structure=struct.as_dict(),
                 model=model,
                 fmax=0.05,
@@ -194,7 +194,7 @@ Cl1 Cl 0.5 0.5 0.5 1.0
             [[0, 0, 0], [0.5, 0.5, 0.5]]
         )
         
-        result = ml_relax_structure(
+        result = matgl_relax_structure(
             input_structure=struct.as_dict(),
             model="TensorNet-MatPES-PBE-v2025.1-PES",
             relax_cell=True,
@@ -213,7 +213,7 @@ Cl1 Cl 0.5 0.5 0.5 1.0
 
     def test_invalid_structure_handling(self):
         """Test that invalid structures are handled gracefully."""
-        result = ml_relax_structure(
+        result = matgl_relax_structure(
             input_structure="not a valid structure",
             model="TensorNet-MatPES-PBE-v2025.1-PES"
         )
@@ -232,7 +232,7 @@ Cl1 Cl 0.5 0.5 0.5 1.0
             [[0, 0, 0], [0.5, 0.5, 0.5]]
         )
         
-        result = ml_relax_structure(
+        result = matgl_relax_structure(
             input_structure=struct.as_dict(),
             model="TensorNet-MatPES-PBE-v2025.1-PES",
             fmax=0.05,
@@ -245,7 +245,3 @@ Cl1 Cl 0.5 0.5 0.5 1.0
         else:
             # Model download might fail in CI environment
             assert "error" in result
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])

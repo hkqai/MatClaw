@@ -16,7 +16,7 @@ from typing import Dict, Any, Optional, Union, Annotated, Literal
 from pydantic import Field
 
 
-def ml_relax_structure(
+def matgl_relax_structure(
     input_structure: Annotated[
         Union[Dict[str, Any], str],
         Field(

@@ -1,11 +1,11 @@
 """
-Tests for ml_predict_eform tool.
+Tests for matgl_predict_eform tool.
 
-Run with: pytest tests/ml_prediction/test_ml_predict_eform.py -v
+Run with: pytest tests/matgl/test_matgl_predict_eform.py -v
 """
 
 import pytest
-from tools.ml_prediction.ml_predict_eform import ml_predict_eform
+from tools.matgl.matgl_predict_eform import matgl_predict_eform
 
 
 # Check if DGL is available
@@ -34,7 +34,7 @@ class TestMLPredictEform:
             [[0, 0, 0], [0.5, 0.5, 0.5]]
         )
         
-        result = ml_predict_eform(
+        result = matgl_predict_eform(
             input_structure=struct.as_dict(),
             model="M3GNet-MP-2018.6.1-Eform"
         )
@@ -68,7 +68,7 @@ class TestMLPredictEform:
             [[0, 0, 0], [0.5, 0.5, 0.5]]
         )
         
-        result = ml_predict_eform(
+        result = matgl_predict_eform(
             input_structure=struct.as_dict(),
             model="MEGNet-MP-2018.6.1-Eform"
         )
@@ -100,7 +100,7 @@ class TestMLPredictEform:
         ]
         
         for struct in structures:
-            result = ml_predict_eform(
+            result = matgl_predict_eform(
                 input_structure=struct.as_dict(),
                 model="M3GNet-MP-2018.6.1-Eform"
             )
@@ -132,7 +132,7 @@ Cs1 Cs 0.0 0.0 0.0 1.0
 Cl1 Cl 0.5 0.5 0.5 1.0
 """
         
-        result = ml_predict_eform(
+        result = matgl_predict_eform(
             input_structure=cif_string,
             model="M3GNet-MP-2018.6.1-Eform"
         )
@@ -152,7 +152,7 @@ Cl1 Cl 0.5 0.5 0.5 1.0
             [[0, 0, 0], [0.5, 0.5, 0.5]]
         )
         
-        result = ml_predict_eform(
+        result = matgl_predict_eform(
             input_structure=struct.as_dict(),
             model="M3GNet-MP-2018.6.1-Eform"
         )
@@ -175,7 +175,7 @@ Cl1 Cl 0.5 0.5 0.5 1.0
             [[0, 0, 0], [0.5, 0.5, 0.5]]
         )
         
-        result = ml_predict_eform(
+        result = matgl_predict_eform(
             input_structure=struct.as_dict(),
             model="M3GNet-MP-2018.6.1-Eform"
         )
@@ -199,7 +199,7 @@ Cl1 Cl 0.5 0.5 0.5 1.0
             [[0, 0, 0], [0.5, 0.5, 0.5]]
         )
         
-        result = ml_predict_eform(
+        result = matgl_predict_eform(
             input_structure=struct.as_dict(),
             model="M3GNet-MP-2018.6.1-Eform"
         )
@@ -213,7 +213,7 @@ Cl1 Cl 0.5 0.5 0.5 1.0
 
     def test_invalid_structure_handling(self):
         """Test that invalid structures are handled gracefully."""
-        result = ml_predict_eform(
+        result = matgl_predict_eform(
             input_structure="not a valid structure",
             model="M3GNet-MP-2018.6.1-Eform"
         )
@@ -235,7 +235,7 @@ Cl1 Cl 0.5 0.5 0.5 1.0
             [[0, 0, 0], [0.5, 0.5, 0.5]]
         )
         
-        result = ml_predict_eform(
+        result = matgl_predict_eform(
             input_structure=struct.as_dict(),
             model="M3GNet-MP-2018.6.1-Eform"
         )
@@ -256,12 +256,12 @@ Cl1 Cl 0.5 0.5 0.5 1.0
             [[0, 0, 0], [0.5, 0.5, 0.5]]
         )
         
-        result_m3gnet = ml_predict_eform(
+        result_m3gnet = matgl_predict_eform(
             input_structure=struct.as_dict(),
             model="M3GNet-MP-2018.6.1-Eform"
         )
         
-        result_megnet = ml_predict_eform(
+        result_megnet = matgl_predict_eform(
             input_structure=struct.as_dict(),
             model="MEGNet-MP-2018.6.1-Eform"
         )
@@ -277,7 +277,3 @@ Cl1 Cl 0.5 0.5 0.5 1.0
         diff = abs(result_m3gnet["formation_energy_eV_per_atom"] - 
                    result_megnet["formation_energy_eV_per_atom"])
         assert diff < 1.0, "Model predictions should be reasonably consistent"
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])

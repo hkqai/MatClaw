@@ -12,11 +12,11 @@ Use this tool to:
 - Rank materials by predicted optoelectronic properties
 """
 
-from typing import Dict, Any, Optional, Union, Annotated, Literal
+from typing import Dict, Any, Union, Annotated, Literal
 from pydantic import Field
 
 
-def ml_predict_bandgap(
+def matgl_predict_bandgap(
     input_structure: Annotated[
         Union[Dict[str, Any], str],
         Field(

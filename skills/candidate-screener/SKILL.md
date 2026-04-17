@@ -284,8 +284,8 @@ Search ASE database for previously computed/cached properties.
 
 ---
 
-#### 10. `ml_relax_structure` — ML-Based Structure Optimization
-Relax crystal structure using machine learning potentials (TensorNet models, PYG backend).
+#### 10. `matgl_relax_structure` — ML-Based Structure Optimization
+Relax crystal structure using potentials from MatGL (TensorNet models, PYG backend).
 
 **Key parameters:**
 - `input_structure`: pymatgen Structure dict or CIF/POSCAR string
@@ -314,7 +314,7 @@ Relax crystal structure using machine learning potentials (TensorNet models, PYG
 
 ---
 
-#### 11. `ml_predict_eform` — Formation Energy Prediction
+#### 11. `matgl_predict_eform` — Formation Energy Prediction
 Predict formation energy using M3GNet/MEGNet models (DGL backend).
 
 **Key parameters:**
@@ -343,7 +343,7 @@ Predict formation energy using M3GNet/MEGNet models (DGL backend).
 
 ---
 
-#### 12. `ml_predict_bandgap` — Band Gap Prediction
+#### 12. `matgl_predict_bandgap` — Band Gap Prediction
 Predict electronic band gap using MEGNet model (DGL backend).
 
 **Key parameters:**
@@ -680,7 +680,7 @@ SET candidate.property_source = "ML_prediction"
 # Optional: Relax structure first (recommended for better accuracy)
 IF relax_structures_enabled:
     TRY:
-        CALL ml_relax_structure(
+        CALL matgl_relax_structure(
             input_structure=candidate.structure,
             fmax=0.1,
             max_steps=500
@@ -699,7 +699,7 @@ IF relax_structures_enabled:
 
 # Predict formation energy
 TRY:
-    CALL ml_predict_eform(
+    CALL matgl_predict_eform(
         input_structure=candidate.structure,
         model="M3GNet-MP-2018.6.1-Eform"
     )
@@ -708,7 +708,7 @@ TRY:
 EXCEPT error:
     # Try alternative model
     TRY:
-        CALL ml_predict_eform(
+        CALL matgl_predict_eform(
             input_structure=candidate.structure,
             model="MEGNet-MP-2018.6.1-Eform"
         )
@@ -721,7 +721,7 @@ EXCEPT error:
 
 # Predict band gap
 TRY:
-    CALL ml_predict_bandgap(
+    CALL matgl_predict_bandgap(
         input_structure=candidate.structure,
         model="MEGNet-MP-2019.4.1-BandGap-mfi"
     )
@@ -930,7 +930,7 @@ ELSE:
 
 IF relax_structure:
     TRY:
-        CALL ml_relax_structure(candidate.structure)
+        CALL matgl_relax_structure(candidate.structure)
         USE relaxed_structure for predictions
     EXCEPT error:
         LOG "Relaxation failed: {error}"
@@ -946,14 +946,14 @@ IF relax_structure:
 **Algorithm:**
 ```
 TRY:
-    result = ml_predict_eform(structure, model="M3GNet-MP-2018.6.1-Eform")
+    result = matgl_predict_eform(structure, model="M3GNet-MP-2018.6.1-Eform")
     SET candidate.properties.formation_energy = result.value
     RETURN success
 EXCEPT error1:
     LOG "Primary model failed: {error1}"
     
     TRY:
-        result = ml_predict_eform(structure, model="MEGNet-MP-2018.6.1-Eform")
+        result = matgl_predict_eform(structure, model="MEGNet-MP-2018.6.1-Eform")
         SET candidate.properties.formation_energy = result.value
         SET candidate.model_fallback = True
         RETURN success
@@ -1394,12 +1394,12 @@ FUNCTION handle_memory_exhaustion(current_operation, state):
 
 # Usage
 TRY:
-    result = ml_relax_structure(structure)
+    result = matgl_relax_structure(structure)
 EXCEPT MemoryError:
-    action = handle_memory_exhaustion("ml_relax_structure", current_state)
+    action = handle_memory_exhaustion("matgl_relax_structure", current_state)
     IF action == retry:
         TRY:
-            result = ml_relax_structure(structure)
+            result = matgl_relax_structure(structure)
         EXCEPT MemoryError:
             # Still failing, skip relaxation for this candidate
             LOG "Skipping relaxation for {candidate.formula}"
