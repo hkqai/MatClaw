@@ -263,6 +263,19 @@ def matcalc_calc_elasticity(
         if shear_strains is None:
             shear_strains = [-0.06, -0.03, 0.03, 0.06]  # Default from matcalc, no zero
         
+        # Set appropriate backend based on calculator type
+        try:
+            import matgl
+            # M3GNet and CHGNet models require DGL backend
+            if any(model in calculator.upper() for model in ["M3GNET", "CHGNET"]):
+                matgl.set_backend('DGL')
+            else:
+                # TensorNet and other models use PYG (default)
+                matgl.set_backend('PYG')
+        except Exception as e:
+            # Backend setting is optional, continue if it fails
+            pass
+        
         # Load calculator
         try:
             calc_obj = mtc.load_fp(calculator)
