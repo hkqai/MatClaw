@@ -199,8 +199,16 @@ def matcalc_calc_surface(
             "miller_index": miller_index
         }
     
-    # Set DGL backend for M3GNet/CHGNet
-    _set_backend_if_needed(calculator)
+    # Set appropriate backend based on calculator type
+    try:
+        import matgl
+        # M3GNet and CHGNet models require DGL backend
+        if any(name in calculator.upper() for name in ['M3GNET', 'CHGNET']):
+            matgl.set_backend('DGL')
+        else:
+            matgl.set_backend('PYG')
+    except Exception:
+        pass
     
     # Load calculator
     try:
