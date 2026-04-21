@@ -313,18 +313,3 @@ def _parse_structure(structure_input: Union[Dict[str, Any], str]) -> "Structure"
     else:
         raise ValueError(f"structure_input must be dict or str, got {type(structure_input)}")
 
-
-def _set_backend_if_needed(calculator: str) -> None:
-    """
-    Set DGL backend for M3GNet/CHGNet calculators.
-    
-    Args:
-        calculator: Calculator name
-    """
-    # M3GNet and CHGNet require DGL backend, TensorNet uses PYG (default)
-    if any(name in calculator.upper() for name in ['M3GNET', 'CHGNET']):
-        try:
-            import matgl
-            matgl.set_backend('DGL')
-        except ImportError:
-            pass  # matgl may not be available, will fail later if needed

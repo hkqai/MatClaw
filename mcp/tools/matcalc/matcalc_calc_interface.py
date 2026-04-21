@@ -162,8 +162,18 @@ def matcalc_calc_interface(
             "details": "Ensure all structures are valid Structure dicts or CIF/POSCAR strings."
         }
     
-    # Set DGL backend for M3GNet/CHGNet
-    _set_backend_if_needed(calculator)
+    # Set appropriate backend based on calculator type
+    try:
+        import matgl
+        # M3GNet and CHGNet models require DGL backend
+        if any(model in calculator.upper() for model in ["M3GNET", "CHGNET"]):
+            matgl.set_backend('DGL')
+        else:
+            # TensorNet and other models use PYG (default)
+            matgl.set_backend('PYG')
+    except Exception as e:
+        # Backend setting is optional, continue if it fails
+        pass
     
     # Load calculator
     try:
@@ -288,18 +298,3 @@ def _parse_structure(structure_input: Union[Dict[str, Any], str]) -> "Structure"
     else:
         raise ValueError(f"structure_input must be dict or str, got {type(structure_input)}")
 
-
-def _set_backend_if_needed(calculator: str) -> None:
-    """
-    Set DGL backend for M3GNet/CHGNet calculators.
-    
-    Args:
-        calculator: Calculator name
-    """
-    # M3GNet and CHGNet require DGL backend, TensorNet uses PYG (default)
-    if any(name in calculator.upper() for name in ['M3GNET', 'CHGNET']):
-        try:
-            import matgl
-            matgl.set_backend('DGL')
-        except ImportError:
-            pass  # matgl may not be available, will fail later if needed
