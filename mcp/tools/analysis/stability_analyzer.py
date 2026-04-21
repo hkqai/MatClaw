@@ -323,7 +323,7 @@ def stability_analyzer(
                     is_stable = False
             else:
                 stability_level = "unknown"
-                is_stable = False
+                is_stable = "unknown"
             
             # Decomposition products
             decomposition_products = []

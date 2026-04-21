@@ -483,7 +483,7 @@ compositions = result['compositions']
 ```python
 stable_compositions = []
 for comp in compositions:
-    stability = stability_analyzer(composition=comp['formula'])
+    stability = stability_analyzer(input_structure=comp['formula'])
     if stability['is_stable'] or stability['energy_above_hull'] < 0.1:
         stable_compositions.append(comp['formula'])
 
@@ -902,7 +902,7 @@ print(f"Generated {result['count']} compositions")
 # Step 2: Filter by thermodynamic stability
 stable_candidates = []
 for comp in result['compositions']:
-    stability = stability_analyzer(composition=comp['formula'])
+    stability = stability_analyzer(input_structure=comp['formula'])
     if stability['energy_above_hull'] < 0.1:  # Within 100 meV/atom
         stable_candidates.append({
             'formula': comp['formula'],
@@ -1191,7 +1191,7 @@ SET stable_compositions = []
 
 FOR EACH comp IN discovered_compositions:
     # Check thermodynamic stability
-    CALL stability_analyzer(composition=comp['formula'])
+    CALL stability_analyzer(input_structure=comp['formula'])
     
     IF stability_result['is_stable']:
         comp['energy_above_hull'] = 0.0

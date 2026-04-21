@@ -108,7 +108,7 @@ def pymatgen_ion_exchange_generator(
         }
 
     # Validate output_format
-    valid_formats = {"dict", "poscar", "cif", "json"}
+    valid_formats = {"dict", "poscar", "cif", "json", "ase"}
     if output_format not in valid_formats:
         return {
             "success": False,
@@ -336,6 +336,14 @@ def pymatgen_ion_exchange_generator(
                 elif output_format == "json":
                     import json
                     formatted = json.dumps(new_struct.as_dict())
+                elif output_format == "ase":
+                    # Convert to ASE-compatible format
+                    formatted = {
+                        "numbers": [site.specie.Z for site in new_struct.sites],
+                        "positions": [site.coords.tolist() for site in new_struct.sites],
+                        "cell": new_struct.lattice.matrix.tolist(),
+                        "pbc": [True, True, True]
+                    }
             except Exception as e:
                 warnings.append(f"Structure {struct_label}: output formatting failed: {e}")
                 continue

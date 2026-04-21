@@ -459,10 +459,18 @@ def pymatgen_substitution_generator(
                         elif output_format == "json":
                             import json
                             output_struct = json.dumps(new_struct.as_dict())
+                        elif output_format == "ase":
+                            # Convert to ASE-compatible format
+                            output_struct = {
+                                "numbers": [site.specie.Z for site in new_struct.sites],
+                                "positions": [site.coords.tolist() for site in new_struct.sites],
+                                "cell": new_struct.lattice.matrix.tolist(),
+                                "pbc": [True, True, True]
+                            }
                         else:
                             return {
                                 "success": False,
-                                "error": f"Invalid output_format: {output_format}. Must be 'dict', 'poscar', 'cif', or 'json'"
+                                "error": f"Invalid output_format: {output_format}. Must be 'dict', 'poscar', 'cif', 'json', or 'ase'"
                             }
                         
                         # Store structure and metadata

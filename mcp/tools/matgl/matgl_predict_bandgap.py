@@ -12,11 +12,11 @@ Use this tool to:
 - Rank materials by predicted optoelectronic properties
 """
 
-from typing import Dict, Any, Optional, Union, Annotated, Literal
+from typing import Dict, Any, Union, Annotated, Literal
 from pydantic import Field
 
 
-def ml_predict_bandgap(
+def matgl_predict_bandgap(
     input_structure: Annotated[
         Union[Dict[str, Any], str],
         Field(
@@ -33,7 +33,7 @@ def ml_predict_bandgap(
             default="MEGNet-MP-2019.4.1-BandGap-mfi",
             description=(
                 "ML model to use for band gap prediction. Currently only one model is supported:\n"
-                "- MEGNet-MP-2019.4.1-BandGap-mfi (MatErials Graph Network trained on MP data)"
+                "- MEGNet-MP-2019.4.1-BandGap-mfi (Materials Graph Network trained on MP data)"
             )
         )
     ] = "MEGNet-MP-2019.4.1-BandGap-mfi",

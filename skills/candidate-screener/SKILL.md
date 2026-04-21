@@ -1,13 +1,13 @@
 ---
 name: candidate-screener
-description: Validate, enrich with properties, and rank candidate structures for materials discovery. Takes candidates from candidate-generator skill, validates structures, retrieves properties from Materials Project/ASE database/ML predictions hierarchically, applies screening criteria, and ranks by multi-objective optimization. Use this skill to transform raw candidate lists into ranked, property-enriched sets ready for synthesis or DFT calculations.
+description: Validate, enrich with properties, and rank candidate structures for materials discovery. Takes candidates from candidate-generator skill, validates structures, retrieves properties from Materials Project/ASE database/ML calculations hierarchically, applies screening criteria, and ranks by multi-objective optimization. ML calculations use MatGL for formation energy and band gap predictions, and matcalc for mechanical (elasticity), vibrational (phonons), surface, thermal, and reaction properties. Use this skill to transform raw candidate lists into ranked, property-enriched sets ready for synthesis or DFT calculations.
 ---
 
 # Candidate Screening Skill
 
 This skill orchestrates high-throughput screening of candidate structures using a strict hierarchical workflow:
 1. **Structure validation & analysis** (filter invalid candidates early)
-2. **Property retrieval** (MP -> ASE cache -> ML prediction, in that order)
+2. **Property retrieval** (MP → ASE cache → ML calculation, in that order)
 3. **Criteria-based filtering** (apply hard constraints)
 4. **Multi-objective ranking** (order by desirability)
 
@@ -16,7 +16,13 @@ This skill orchestrates high-throughput screening of candidate structures using 
 **Data Source Hierarchy = Quality × Speed optimization:**
 - Materials Project first (DFT-quality, peer-reviewed)
 - ASE database second (cached results, instant lookup)
-- ML prediction last (fast fallback, reasonable accuracy)
+- ML-based property calculation third:
+  - **MatGL**: Direct predictions for formation energy and band gap (fast, 2018-2019 models)
+  - **matcalc**: Calculations for all other properties using 2025 ML potentials (elasticity, phonons, surfaces, etc.)
+
+**matcalc vs MatGL - Complementary Tools:**
+- **MatGL** (`matgl_predict_eform`, `matgl_predict_bandgap`): Fast property predictors trained on large datasets. Use for formation energy and band gap only.
+- **matcalc** (11 tools): Structure optimization and property calculators using state-of-the-art ML potentials. Required for mechanical, vibrational, surface, and thermal properties.
 
 **Always cache everything** in ASE database to avoid recomputation across screening runs.
 
@@ -92,8 +98,8 @@ Analyzes elemental composition, oxidation states, and chemical properties.
 Predicts whether a composition is likely thermodynamically stable using Materials Project phase diagram.
 
 **Key parameters:**
-- `structure`: pymatgen Structure dict/string, or just `composition="LiFePO4"`
-- `energy_tolerance`: eV/atom above convex hull to consider "metastable" (default 0.1)
+- `input_structure`: pymatgen Structure dict/string, or just composition string (e.g., "LiFePO4")
+- `hull_tolerance`: eV/atom above convex hull to consider "metastable" (default 0.1)
 
 **Returns:**
 ```python
@@ -284,8 +290,348 @@ Search ASE database for previously computed/cached properties.
 
 ---
 
-#### 10. `ml_relax_structure` — ML-Based Structure Optimization
-Relax crystal structure using machine learning potentials (TensorNet models, PYG backend).
+#### 10. `matcalc_calc_energetics` — Formation & Cohesive Energy (matcalc)
+Compute formation energy (relative to elemental references) and cohesive energy using state-of-the-art 2025 ML potentials.
+
+**⚠️ MANDATORY PREREQUISITE:** Structure must be relaxed with `matgl_relax_structure` before calling this tool. ML potentials require equilibrium geometries for accurate energetics.
+
+**When to use:** If you need **cohesive energy** or **detailed energetics**. For formation energy screening only, use `matgl_predict_eform` (faster, direct prediction).
+
+**Key parameters:****
+- `structure_input`: pymatgen Structure dict or CIF/POSCAR string
+- `calculator`: ML potential (default `"M3GNet"`, options: `"TensorNet-MatPES-PBE-v2025.1-PES"`, `"CHGNet"`, `"r2scan"`)
+- `elemental_refs`: reference data (default `"MatPES-PBE"`, must match calculator functional)
+- `relax_structure`: whether to relax before calculation (default `True`)
+- `fmax`: force convergence tolerance in eV/Å (default 0.1)
+
+**Returns:**
+```python
+{
+  "success": True,
+  "formula": "LiFePO4",
+  "formation_energy_per_atom": -2.35,  # eV/atom
+  "cohesive_energy_per_atom": -5.12,  # eV/atom
+  "total_energy": -247.8,  # eV
+  "calculator": "M3GNet-MatPES-PBE-v2025.1-PES",
+  "confidence": "medium-high"
+}
+```
+
+**Use for:** Cohesive energy calculations, detailed energetics. For formation energy screening, prefer `matgl_predict_eform` (faster).
+
+---
+
+#### 11. `matcalc_calc_elasticity` — Mechanical Properties (matcalc)
+Calculate full elastic tensor, bulk modulus, shear modulus, Young's modulus, and Poisson's ratio.
+
+**⚠️ MANDATORY PREREQUISITE:** Structure must be relaxed with `matgl_relax_structure` before calling this tool.
+
+**Key parameters:**
+- `input_structure`: pymatgen Structure dict or CIF/POSCAR string
+- `calculator`: ML potential (default `"TensorNet-MatPES-PBE-v2025.1-PES"`)
+- `relax_structure`: relax before calculation (default `False`)
+- `relax_deformed_structures`: relax atoms in strained structures (default `True`)
+- `fmax`: force tolerance (default 0.1 eV/Å)
+- `norm_strains`: strain magnitudes for fitting (default 0.01)
+
+**Returns:**
+```python
+{
+  "success": True,
+  "formula": "LiFePO4",
+  "elastic_tensor": [[...], ...],  # 6x6 matrix in GPa
+  "bulk_modulus": 120.5,  # GPa (Voigt average)
+  "shear_modulus": 55.3,  # GPa
+  "youngs_modulus": 145.2,  # GPa
+  "poissons_ratio": 0.31,
+  "universal_anisotropy": 1.05,
+  "is_stable": True  # Positive definite elastic tensor
+}
+```
+
+**Use for:** Screening by mechanical properties (ductility, hardness, mechanical stability).
+
+---
+
+#### 12. `matcalc_calc_phonon` — Vibrational Properties (matcalc)
+Calculate phonon dispersion, density of states, and temperature-dependent thermodynamic properties.
+
+**⚠️ MANDATORY PREREQUISITE:** Structure must be relaxed with `matgl_relax_structure` before calling this tool.
+
+**Key parameters:**
+- `structure_input`: pymatgen Structure dict or CIF/POSCAR string
+- `calculator`: ML potential (default `"TensorNet-MatPES-PBE"`)
+- `atom_disp`: atomic displacement for force constants (default 0.015 Å)
+- `supercell_matrix`: phonon supercell (default `[[2,0,0],[0,2,0],[0,0,2]]`)
+- `t_min`, `t_max`, `t_step`: temperature range for thermodynamics (default 0-1000 K, step 10 K)
+- `relax_structure`: relax before calculation (default `True`)
+
+**Returns:**
+```python
+{
+  "success": True,
+  "formula": "LiFePO4",
+  "has_imaginary_modes": False,  # False = dynamically stable
+  "free_energy": {...},  # Dict with temperatures as keys
+  "entropy": {...},
+  "heat_capacity": {...},
+  "zero_point_energy": 0.45,  # eV/atom
+  "phonon_band_structure": {...},
+  "phonon_dos": {...}
+}
+```
+
+**Use for:** Filter dynamically unstable structures (imaginary phonon modes), assess thermodynamic stability.
+
+---
+
+#### 13. `matcalc_calc_eos` — Equation of State (matcalc)
+Compute volume-energy relationship, equilibrium volume, and bulk modulus by fitting EOS models.
+
+**⚠️ MANDATORY PREREQUISITE:** Structure must be relaxed with `matgl_relax_structure` before calling this tool.
+
+**Key parameters:**
+- `input_structure`: pymatgen Structure dict or CIF/POSCAR string
+- `calculator`: ML potential (default `"TensorNet-MatPES-PBE-v2025.1-PES"`)
+- `relax_structure`: relax before calculation (default `True`)
+- `n_points`: number of volume points (default 11, range 5-30)
+- `max_abs_strain`: maximum volume strain (default 0.1, ±10%)
+- `eos_type`: fitting model (default `"vinet"`, options: `"murnaghan"`, `"birch_murnaghan"`)
+
+**Returns:**
+```python
+{
+  "success": True,
+  "formula": "LiFePO4",
+  "equilibrium_volume": 291.4,  # Å³
+  "bulk_modulus": 120.5,  # GPa
+  "bulk_modulus_derivative": 4.2,
+  "equilibrium_energy": -247.8,  # eV
+  "eos_type": "vinet",
+  "volumes": [...],
+  "energies": [...]
+}
+```
+
+**Use for:** Validate equilibrium structure, cross-check bulk modulus from elasticity.
+
+---
+
+#### 14. `matcalc_calc_surface` — Surface Energies (matcalc)
+Calculate surface energy for specific Miller indices by comparing slab and bulk energies.
+
+**⚠️ MANDATORY PREREQUISITE:** Structure must be relaxed with `matgl_relax_structure` before calling this tool.
+
+**Key parameters:**
+- `structure_input`: bulk structure (pymatgen dict or CIF/POSCAR)
+- `miller_index`: surface plane as list `[h,k,l]` (e.g., `[1,1,1]`)
+- `calculator`: ML potential (default `"CHGNet"`)
+- `min_slab_size`: slab thickness in Å (default 10.0, range 5-30)
+- `min_vacuum_size`: vacuum gap in Å (default 10.0, range 5-30)
+- `symmetrize`: ensure symmetric slab (default `True`)
+- `relax_slab`: relax slab structure (default `True`)
+
+**Returns:**
+```python
+{
+  "success": True,
+  "formula": "LiFePO4",
+  "miller_index": [1, 1, 1],
+  "surface_energy": 1.25,  # J/m²
+  "slab_energy": -1240.5,  # eV
+  "bulk_energy_per_atom": -5.12,  # eV/atom
+  "slab_structure": {...}  # Relaxed slab
+}
+```
+
+**Use for:** Screen catalysts by surface stability, compare facet energies.
+
+---
+
+#### 15. `matcalc_calc_adsorption` — Adsorption Energies (matcalc)
+Compute adsorption energy by comparing adsorbate-slab system to clean slab and isolated adsorbate.
+
+**⚠️ MANDATORY PREREQUISITE:** Structure must be relaxed with `matgl_relax_structure` before calling this tool.
+
+**Key parameters:**
+- `slab_structure`: slab with vacuum (pymatgen dict or CIF/POSCAR)
+- `adsorbate`: molecule formula (e.g., `"CO"`, `"H2O"`), atom position, or pymatgen Molecule dict
+- `adsorption_site`: site type (default `"ontop"`, options: `"bridge"`, `"hollow"`, `"all"`)
+- `distance`: adsorbate-surface distance in Å (default 2.0, range 1-4)
+- `calculator`: ML potential (default `"CHGNet"`)
+- `relax_adsorbate_slab`: relax adsorbate+slab system (default `True`)
+
+**Returns:**
+```python
+{
+  "success": True,
+  "adsorbate": "CO",
+  "adsorption_site": "ontop",
+  "adsorption_energy": -1.35,  # eV (negative = favorable)
+  "adsorbate_slab_energy": -1255.8,  # eV
+  "clean_slab_energy": -1240.5,  # eV
+  "adsorbate_energy": -13.8,  # eV
+  "relaxed_structure": {...}
+}
+```
+
+**Use for:** Screen catalysts by binding strength, optimize adsorption sites.
+
+---
+
+#### 16. `matcalc_calc_interface` — Interface Energies (matcalc)
+Calculate grain boundary or heterostructure interface energy.
+
+**⚠️ MANDATORY PREREQUISITE:** Structure must be relaxed with `matgl_relax_structure` before calling this tool.
+
+**Key parameters:**
+- `interface_structure`: combined interface structure (pymatgen dict or CIF/POSCAR)
+- `film_bulk`: bulk structure of film/top layer
+- `substrate_bulk`: bulk structure of substrate/bottom layer
+- `calculator`: ML potential (default `"CHGNet"`)
+- `relax_bulk`: relax bulk references (default `True`)
+- `relax_interface`: relax interface structure (default `True`)
+
+**Returns:**
+```python
+{
+  "success": True,
+  "interface_energy": 0.85,  # J/m²
+  "interface_total_energy": -2480.5,  # eV
+  "film_bulk_energy_per_atom": -5.12,  # eV/atom
+  "substrate_bulk_energy_per_atom": -6.23  # eV/atom
+}
+```
+
+**Use for:** Screen heterostructure combinations, evaluate grain boundary stability.
+
+---
+
+#### 17. `matcalc_calc_md` — Molecular Dynamics (matcalc)
+Run MD simulations to calculate thermodynamic properties and sample phase space.
+
+**⚠️ MANDATORY PREREQUISITE:** Structure must be relaxed with `matgl_relax_structure` before calling this tool.
+
+**Key parameters:**
+- `structure_input`: pymatgen Structure dict or CIF/POSCAR string
+- `calculator`: ML potential (default `"TensorNet-MatPES-PBE"`)
+- `ensemble`: MD ensemble (default `"nvt"`, options: `"nve"`, `"npt"`, `"langevin"`)
+- `temperature`: temperature in K (default 300.0)
+- `timestep`: timestep in fs (default 1.0)
+- `steps`: MD steps (default 100)
+- `pressure`: pressure in GPa (default `None`, used for NPT)
+- `relax_structure`: relax before MD (default `True`)
+
+**Returns:**
+```python
+{
+  "success": True,
+  "formula": "LiFePO4",
+  "ensemble": "nvt",
+  "average_temperature": 300.2,  # K
+  "average_energy": -247.5,  # eV
+  "energy_std": 0.15,  # eV
+  "final_structure": {...},
+  "trajectory": [...]  # List of structures
+}
+```
+
+**Use for:** Validate structure stability at temperature, sample configurational space.
+
+---
+
+#### 18. `matcalc_calc_neb` — Reaction Barriers (matcalc)
+Calculate minimum energy path and activation barrier between initial and final structures using NEB.
+
+**⚠️ MANDATORY PREREQUISITE:** Structures must be relaxed with `matgl_relax_structure` before calling this tool.
+
+**Key parameters:**
+- `images`: initial and final structures (list or dict with `image0`, `image1`, etc.)
+- `calculator`: ML potential (default `"M3GNet"`)
+- `n_images`: number of NEB images (default 5, range 2-20)
+- `climb`: use climbing image NEB for accurate barriers (default `True`)
+- `fmax`: force convergence in eV/Å (default 0.1)
+- `optimizer`: NEB optimizer (default `"FIRE"`, options: `"BFGS"`, `"MDMin"`)
+
+**Returns:**
+```python
+{
+  "success": True,
+  "activation_barrier_forward": 0.82,  # eV
+  "activation_barrier_reverse": 1.15,  # eV
+  "transition_state_energy": -245.8,  # eV
+  "reaction_energy": -0.33,  # eV (final - initial)
+  "converged": True,
+  "energies": [...],  # Energy at each image
+  "images": [...]  # Structures along MEP
+}
+```
+
+**Use for:** Screen diffusion barriers, reaction pathways, phase transformation energetics.
+
+---
+
+#### 19. `matcalc_calc_phonon3` — Thermal Conductivity (matcalc)
+Calculate lattice thermal conductivity using third-order force constants and BTE.
+
+**⚠️ MANDATORY PREREQUISITE:** Structure must be relaxed with `matgl_relax_structure` before calling this tool.
+
+**Key parameters:**
+- `structure_input`: pymatgen Structure dict or CIF/POSCAR string
+- `calculator`: ML potential (default `"TensorNet-MatPES-PBE"`)
+- `fc2_supercell`: 2nd-order force constant supercell (default `[[2,0,0],[0,2,0],[0,0,2]]`)
+- `fc3_supercell`: 3rd-order force constant supercell (default `[[2,0,0],[0,2,0],[0,0,2]]`)
+- `mesh_numbers`: q-point mesh (default `[20,20,20]`)
+- `t_min`, `t_max`, `t_step`: temperature range (default 0-1000 K)
+- `relax_structure`: relax before calculation (default `True`)
+
+**Returns:**
+```python
+{
+  "success": True,
+  "formula": "LiFePO4",
+  "thermal_conductivity": {...},  # Dict with temperatures as keys, W/(m·K)
+  "kappa_300K": 5.2,  # W/(m·K) at 300 K
+  "mean_free_path": {...}  # Temperature-dependent
+}
+```
+
+**Use for:** Screen thermoelectric materials, thermal management applications.
+
+---
+
+#### 20. `matcalc_calc_qha` — Thermal Expansion (matcalc)
+Calculate temperature-dependent thermodynamics using quasi-harmonic approximation.
+
+**⚠️ MANDATORY PREREQUISITE:** Structure must be relaxed with `matgl_relax_structure` before calling this tool.
+
+**Key parameters:****
+- `structure_input`: pymatgen Structure dict or CIF/POSCAR string
+- `calculator`: ML potential (default `"TensorNet-MatPES-PBE"`)
+- `t_min`, `t_max`, `t_step`: temperature range (default 0-1000 K)
+- `scale_factors`: volume scaling factors (default `[0.95, ..., 1.0, ..., 1.05]`)
+- `eos`: EOS model (default `"vinet"`, options: `"murnaghan"`, `"birch_murnaghan"`)
+- `relax_structure`: relax before calculation (default `True`)
+
+**Returns:**
+```python
+{
+  "success": True,
+  "formula": "LiFePO4",
+  "thermal_expansion_coefficient": {...},  # Dict with temps, 1/K
+  "gibbs_free_energy": {...},  # Temperature-dependent, eV
+  "bulk_modulus_p": {...},  # Temperature-dependent, GPa
+  "heat_capacity_p": {...},  # Cp, J/(mol·K)
+  "gruneisen_parameter": {...}
+}
+```
+
+**Use for:** Predict thermal expansion, validate high-temperature stability.
+
+---
+
+#### 21. `matgl_relax_structure` — ML-Based Structure Optimization
+Relax crystal structure using potentials from MatGL (TensorNet models, PYG backend).
 
 **Key parameters:**
 - `input_structure`: pymatgen Structure dict or CIF/POSCAR string
@@ -314,8 +660,12 @@ Relax crystal structure using machine learning potentials (TensorNet models, PYG
 
 ---
 
-#### 11. `ml_predict_eform` — Formation Energy Prediction
-Predict formation energy using M3GNet/MEGNet models (DGL backend).
+#### 22. `matgl_predict_eform` — Formation Energy Prediction
+Predict formation energy using M3GNet/MEGNet models (DGL backend). **PRIMARY TOOL for formation energy screening.**
+
+**⚠️ MANDATORY PREREQUISITE:** Structure must be relaxed with `matgl_relax_structure` before calling this tool. ML models are trained on relaxed structures only.
+
+**When to use:** For **fast formation energy prediction** in high-throughput screening. This is faster than `matcalc_calc_energetics` and specifically designed for formation energy prediction.
 
 **Key parameters:**
 - `input_structure`: pymatgen Structure dict or CIF/POSCAR string
@@ -341,10 +691,16 @@ Predict formation energy using M3GNet/MEGNet models (DGL backend).
 - 0 to +1 eV/atom: Metastable/unstable
 - > +1 eV/atom: Highly unstable
 
+**Note:** This is the primary tool for formation energy prediction in high-throughput screening. Use `matcalc_calc_energetics` only when you need cohesive energy or detailed energetics calculations.
+
 ---
 
-#### 12. `ml_predict_bandgap` — Band Gap Prediction
-Predict electronic band gap using MEGNet model (DGL backend).
+#### 23. `matgl_predict_bandgap` — Band Gap Prediction
+Predict electronic band gap using MEGNet model (DGL backend). **PRIMARY TOOL for band gap screening.**
+
+**⚠️ MANDATORY PREREQUISITE:** Structure must be relaxed with `matgl_relax_structure` before calling this tool. ML models are trained on relaxed structures only.
+
+**When to use:** For **fast band gap prediction** in high-throughput screening. This is the only available tool for band gap prediction.
 
 **Key parameters:**
 - `input_structure`: pymatgen Structure dict or CIF/POSCAR string
@@ -369,25 +725,29 @@ Predict electronic band gap using MEGNet model (DGL backend).
 - 2.0-3.0 eV: Wide gap semiconductor
 - > 3.0 eV: Very wide gap/Insulator
 
+**Note:** MatGL bandgap prediction uses 2019 model. For critical applications, verify with DFT.
+
 ---
 
-#### 13. `ase_store_result` — Cache Results in Database
+#### 24. `ase_store_result` — Cache Results in Database
 Store computed/predicted properties in ASE database for future reuse.
 
 **Key parameters:**
 - `db_path`: path to ASE database
-- `structure`: pymatgen Structure dict
-- `properties`: dict of property name→value pairs
-- `calculator`: name of calculator/method used (e.g., `"ML_M3GNet"`, `"Materials_Project"`)
-- `metadata`: optional additional info
+- `atoms_dict`: serialized ASE Atoms object (dict with 'numbers', 'positions', 'cell' keys)
+- `results`: (optional) calculator results dict with energy, forces, stress, etc.
+- `key_value_pairs`: (optional) metadata dict for campaign_id, method, formula, properties, etc.
+- `unique_key`: (optional) unique identifier to avoid duplicates
+- `data`: (optional) additional arbitrary data
 
 **Returns:**
 ```python
 {
   "success": True,
-  "entry_id": 143,
+  "row_id": 143,
   "db_path": "/path/to/screening_run_2024.db",
-  "formula": "LiFePO4"
+  "formula": "LiFePO4",
+  "updated": False
 }
 ```
 
@@ -397,7 +757,7 @@ Store computed/predicted properties in ASE database for future reuse.
 
 ### Phase 3: Ranking & Selection
 
-#### 14. `multi_objective_ranker` — Rank Candidates by Multiple Criteria
+#### 25. `multi_objective_ranker` — Rank Candidates by Multiple Criteria
 Rank candidates using multi-objective optimization (Pareto or weighted sum).
 
 **Key parameters:**
@@ -464,14 +824,16 @@ objectives = [
 3. **STEP 2 - PROPERTIES** (Phase 2): For each validated candidate:
    - TRY Materials Project (best quality) → IF success, CACHE and CONTINUE to next
    - ELSE TRY ASE database (cached) → IF success, CONTINUE to next  
-   - ELSE FALLBACK to ML prediction → predict, CACHE, CONTINUE to next
+   - ELSE ML-based calculation: Relax structure → MatGL predictions (formation energy, band gap) + matcalc calculations (mechanical, vibrational, surface properties as needed) → CACHE and CONTINUE
 4. **STEP 3 - FILTER** (Phase 3): For each candidate with properties → check criteria → KEEP or REJECT
 5. **STEP 4 - RANK** (Phase 4): Multi-objective ranking → confidence weighting
 6. **STEP 5 - OUTPUT**: Generate comprehensive screening report
 
 **CRITICAL RULES:**
 - Never skip validation (Step 1)
-- Always try data sources in order: MP → ASE → ML (never skip ahead)
+- Always try data sources in order: MP → ASE → ML calculation (never skip ahead)
+- Always relax structures before ML calculations (matcalc/MatGL)
+- MatGL for formation energy/band gap; matcalc for mechanical, vibrational, surface, thermal properties
 - Always cache results in ASE database
 - Never silently exclude - always log rejection reasons
 - Mark ML predictions for DFT verification if high-scoring
@@ -507,10 +869,7 @@ STORE db_path for subsequent calls
 **Step 1.1:** Validate structure integrity
 ```
 CALL structure_validator(
-    structure=candidate.structure,
-    check_composition=True,
-    check_charge_neutrality=True,
-    check_geometry=True
+    input_structure=candidate.structure,
 )
 
 IF result.is_valid == False:
@@ -524,9 +883,7 @@ ELSE:
 **Step 1.2:** Analyze chemical composition
 ```
 CALL composition_analyzer(
-    structure=candidate.structure,
-    analyze_oxidation=True,
-    compute_descriptors=True
+    input_structure=candidate.structure,
 )
 
 STORE result.elements in candidate.elements
@@ -540,8 +897,8 @@ IF result.warnings contains critical issues (radioactive, exotic):
 **Step 1.3:** (OPTIONAL) Check thermodynamic stability
 ```
 CALL stability_analyzer(
-    structure=candidate.structure,
-    energy_tolerance=0.1
+    input_structure=candidate.structure,
+    hull_tolerance=0.1
 )
 
 IF result.stability_category == "unstable" AND result.energy_above_hull > 0.3:
@@ -553,9 +910,7 @@ IF result.stability_category == "unstable" AND result.energy_above_hull > 0.3:
 **Step 1.4:** Extract structural features
 ```
 CALL structure_analyzer(
-    structure=candidate.structure,
-    compute_symmetry=True,
-    analyze_coordination=True
+    input_structure=candidate.structure,
 )
 
 STORE result.spacegroup in candidate.spacegroup
@@ -588,9 +943,9 @@ validated_candidates = [c for c in candidates if c not in rejected_candidates]
 
 ### STEP 2: HIERARCHICAL PROPERTY RETRIEVAL (Phase 2)
 
-**Purpose:** Obtain properties using data source hierarchy: Materials Project → ASE cache → ML prediction
+**Purpose:** Obtain properties using data source hierarchy: Materials Project → ASE cache → ML calculation (matcalc + MatGL)
 
-**Rule:** ALWAYS try sources in order. Do NOT skip to ML without checking MP and ASE first.
+**Rule:** ALWAYS try sources in order. Do NOT skip ahead in the hierarchy (MP → ASE → ML).
 
 **Step 2.0:** For each candidate in validated_candidates:
 
@@ -627,10 +982,13 @@ IF result.success AND result.count > 0:
     # Cache in ASE database for future runs
     CALL ase_store_result(
         db_path=db_path,
-        structure=candidate.structure,
-        properties=candidate.properties,
-        calculator="Materials_Project",
-        metadata={"material_id": mp_entry.material_id}
+        atoms_dict=candidate.structure,  # Must be ASE atoms dict format
+        results=candidate.properties,  # Energy, forces, etc. if available
+        key_value_pairs={
+            "material_id": mp_entry.material_id,
+            "source": "Materials_Project",
+            "formula": candidate.formula
+        }
     )
     
     APPEND candidate to candidates_with_properties
@@ -671,77 +1029,145 @@ ELSE:
     # Not in cache either, proceed to Step 2.3
 ```
 
-**Step 2.3:** ML Prediction (THIRD PRIORITY - FALLBACK)
+**Step 2.3:** ML-Based Property Calculation (THIRD PRIORITY)
 ```
 # Only reached if Steps 2.1 and 2.2 both failed
 
-SET candidate.property_source = "ML_prediction"
+SET candidate.property_source = "ML_calculated"
 
-# Optional: Relax structure first (recommended for better accuracy)
-IF relax_structures_enabled:
-    TRY:
-        CALL ml_relax_structure(
-            input_structure=candidate.structure,
-            fmax=0.1,
-            max_steps=500
-        )
-        
-        IF result.converged:
-            SET candidate.structure = result.final_structure
-            SET candidate.was_relaxed = True
-        ELSE:
-            # Use unrelaxed structure
-            SET candidate.was_relaxed = False
-    EXCEPT error:
-        LOG "Relaxation failed for {candidate.formula}: {error}"
-        SET candidate.was_relaxed = False
-        # Continue with unrelaxed structure
-
-# Predict formation energy
+# REQUIRED: Relax structure before ANY ML calculations (matcalc/MatGL)
 TRY:
-    CALL ml_predict_eform(
+    CALL matgl_relax_structure(
         input_structure=candidate.structure,
+        fmax=0.1,
+        max_steps=500
+    )
+    
+    IF result.converged:
+        SET candidate.structure = result.final_structure
+        SET candidate.was_relaxed = True
+    ELSE:
+        LOG "Relaxation failed to converge for {candidate.formula}"
+        SET candidate.requires_dft = True
+        CONTINUE to next candidate  # Skip - cannot proceed without relaxation
+EXCEPT error:
+    LOG "Relaxation failed for {candidate.formula}: {error}"
+    SET candidate.requires_dft = True
+    CONTINUE to next candidate  # Skip - cannot proceed without relaxation
+
+# === FORMATION ENERGY: Use MatGL direct prediction (fast) ===
+TRY:
+    CALL matgl_predict_eform(
+        input_structure=candidate.structure,  # Now relaxed
         model="M3GNet-MP-2018.6.1-Eform"
     )
     SET candidate.properties.formation_energy_per_atom = result.formation_energy_eV_per_atom
     SET candidate.properties.eform_model = result.model_used
+    SET candidate.properties.eform_source = "MatGL_prediction"
 EXCEPT error:
-    # Try alternative model
+    # Try alternative MatGL model
     TRY:
-        CALL ml_predict_eform(
+        CALL matgl_predict_eform(
             input_structure=candidate.structure,
             model="MEGNet-MP-2018.6.1-Eform"
         )
         SET candidate.properties.formation_energy_per_atom = result.formation_energy_eV_per_atom
         SET candidate.properties.eform_model = result.model_used
+        SET candidate.properties.eform_source = "MatGL_prediction"
     EXCEPT error2:
-        LOG "Both ML eform models failed for {candidate.formula}"
+        LOG "Both MatGL eform models failed for {candidate.formula}"
         SET candidate.properties.formation_energy_per_atom = None
         SET candidate.requires_dft = True
 
-# Predict band gap
+# === BAND GAP: Use MatGL direct prediction (fast) ===
 TRY:
-    CALL ml_predict_bandgap(
-        input_structure=candidate.structure,
+    CALL matgl_predict_bandgap(
+        input_structure=candidate.structure,  # Now relaxed
         model="MEGNet-MP-2019.4.1-BandGap-mfi"
     )
     SET candidate.properties.band_gap = result.band_gap_eV
     SET candidate.properties.material_class = result.material_class
     SET candidate.properties.bandgap_model = result.model_used
+    SET candidate.properties.bandgap_source = "MatGL_prediction"
 EXCEPT error:
-    LOG "ML bandgap prediction failed for {candidate.formula}"
+    LOG "MatGL bandgap prediction failed for {candidate.formula}"
     SET candidate.properties.band_gap = None
     SET candidate.requires_dft = True
 
-SET candidate.confidence = "medium"
+# === MECHANICAL PROPERTIES: Use matcalc calculations (if required) ===
+IF screening_requires_mechanical_properties:
+    TRY:
+        CALL matcalc_calc_elasticity(
+            input_structure=candidate.structure,  # Relaxed
+            calculator="TensorNet-MatPES-PBE-v2025.1-PES",
+            relax_structure=False,  # Already relaxed
+            relax_deformed_structures=True
+        )
+        SET candidate.properties.bulk_modulus = result.bulk_modulus
+        SET candidate.properties.shear_modulus = result.shear_modulus
+        SET candidate.properties.youngs_modulus = result.youngs_modulus
+        SET candidate.properties.poissons_ratio = result.poissons_ratio
+        SET candidate.properties.is_mechanically_stable = result.is_stable
+        SET candidate.properties.mechanical_source = "matcalc_2025"
+    EXCEPT error:
+        LOG "matcalc elasticity failed for {candidate.formula}: {error}"
+        SET candidate.requires_dft = True
 
-# Cache results in ASE database for future runs
+# === PHONON PROPERTIES: Use matcalc calculations (if required) ===
+IF screening_requires_phonon_stability:
+    TRY:
+        CALL matcalc_calc_phonon(
+            structure_input=candidate.structure,  # Relaxed
+            calculator="TensorNet-MatPES-PBE",
+            relax_structure=False,  # Already relaxed
+            supercell_matrix=[[2,0,0],[0,2,0],[0,0,2]]
+        )
+        SET candidate.properties.has_imaginary_modes = result.has_imaginary_modes
+        SET candidate.properties.zero_point_energy = result.zero_point_energy
+        SET candidate.properties.phonon_source = "matcalc_2025"
+        
+        IF result.has_imaginary_modes:
+            FLAG candidate.dynamically_unstable = True
+    EXCEPT error:
+        LOG "matcalc phonon failed for {candidate.formula}: {error}"
+        SET candidate.requires_dft = True
+
+# === SURFACE PROPERTIES: Use matcalc calculations (if required) ===
+IF screening_requires_surface_properties:
+    FOR each miller_index in required_surfaces:  # e.g., [[1,0,0], [1,1,0], [1,1,1]]
+        TRY:
+            CALL matcalc_calc_surface(
+                structure_input=candidate.structure,  # Relaxed
+                miller_index=miller_index,
+                calculator="CHGNet",
+                relax_slab=True
+            )
+            STORE result.surface_energy in candidate.properties.surface_energies[miller_index]
+            SET candidate.properties.surface_source = "matcalc_2025"
+        EXCEPT error:
+            LOG "matcalc surface calculation failed for {candidate.formula} {miller_index}: {error}"
+
+# Add other matcalc calculations as needed:
+# - matcalc_calc_eos: for bulk modulus validation
+# - matcalc_calc_adsorption: for catalyst screening
+# - matcalc_calc_md: for thermal stability
+# - matcalc_calc_neb: for diffusion barriers
+# etc.
+
+SET candidate.confidence = "medium"  # ML-based properties
+
+# Cache all results in ASE database for future runs
 CALL ase_store_result(
     db_path=db_path,
-    structure=candidate.structure,
-    properties=candidate.properties,
-    calculator="ML_M3GNet/MEGNet",
-    metadata={"models": [properties.eform_model, properties.bandgap_model]}
+    atoms_dict=candidate.structure,  # Must be ASE atoms dict format
+    results=candidate.properties,
+    key_value_pairs={
+        "source": "ML_hybrid",  # MatGL predictions + matcalc calculations
+        "formula": candidate.formula,
+        "eform_model": candidate.properties.eform_model,
+        "bandgap_model": candidate.properties.bandgap_model,
+        "matcalc_calculator": "TensorNet-MatPES-PBE-v2025.1-PES"  # Primary calculator used
+    }
 )
 
 APPEND candidate to candidates_with_properties
@@ -848,17 +1274,17 @@ SET ranked_candidates = result.ranked_candidates
 **Step 4.3:** Apply confidence-weighted scoring (optional but recommended)
 ```
 confidence_weights = {
-    "Materials_Project": 1.0,
-    "ASE_cached": 0.9,  # Depends on original calculator
-    "ML_prediction": 0.7
+    "Materials_Project": 1.0,     # DFT-quality reference data
+    "ASE_cached": 0.9,            # Depends on original calculator quality
+    "ML_calculated": 0.75         # MatGL predictions + matcalc calculations
 }
 
 FOR each candidate in ranked_candidates:
     SET confidence_factor = confidence_weights[candidate.property_source]
     SET candidate.adjusted_score = candidate.total_score * confidence_factor
     
-    # Flag high-scoring ML predictions for DFT verification
-    IF candidate.total_score > 0.8 AND candidate.property_source == "ML_prediction":
+    # Flag high-scoring ML-calculated predictions for DFT verification
+    IF candidate.total_score > 0.8 AND candidate.property_source == "ML_calculated":
         SET candidate.recommend_dft_verification = True
 ```
 
@@ -882,7 +1308,7 @@ screening_report = {
     "data_source_breakdown": {
         "materials_project": count where property_source == "Materials_Project",
         "ase_cached": count where property_source == "ASE_cached",
-        "ml_predicted": count where property_source == "ML_prediction"
+        "ml_calculated": count where property_source == "ML_calculated"  # MatGL predictions + matcalc calculations
     },
     
     "top_candidates": ranked_candidates[:10],  # Top 10
@@ -930,7 +1356,7 @@ ELSE:
 
 IF relax_structure:
     TRY:
-        CALL ml_relax_structure(candidate.structure)
+        CALL matgl_relax_structure(candidate.structure)
         USE relaxed_structure for predictions
     EXCEPT error:
         LOG "Relaxation failed: {error}"
@@ -946,14 +1372,14 @@ IF relax_structure:
 **Algorithm:**
 ```
 TRY:
-    result = ml_predict_eform(structure, model="M3GNet-MP-2018.6.1-Eform")
+    result = matgl_predict_eform(structure, model="M3GNet-MP-2018.6.1-Eform")
     SET candidate.properties.formation_energy = result.value
     RETURN success
 EXCEPT error1:
     LOG "Primary model failed: {error1}"
     
     TRY:
-        result = ml_predict_eform(structure, model="MEGNet-MP-2018.6.1-Eform")
+        result = matgl_predict_eform(structure, model="MEGNet-MP-2018.6.1-Eform")
         SET candidate.properties.formation_energy = result.value
         SET candidate.model_fallback = True
         RETURN success
@@ -1394,12 +1820,12 @@ FUNCTION handle_memory_exhaustion(current_operation, state):
 
 # Usage
 TRY:
-    result = ml_relax_structure(structure)
+    result = matgl_relax_structure(structure)
 EXCEPT MemoryError:
-    action = handle_memory_exhaustion("ml_relax_structure", current_state)
+    action = handle_memory_exhaustion("matgl_relax_structure", current_state)
     IF action == retry:
         TRY:
-            result = ml_relax_structure(structure)
+            result = matgl_relax_structure(structure)
         EXCEPT MemoryError:
             # Still failing, skip relaxation for this candidate
             LOG "Skipping relaxation for {candidate.formula}"
@@ -1421,7 +1847,7 @@ ASE DB connection    | Yes       | Yes    | Create new DB             | Yes if f
 ASE DB query         | No        | Yes    | ML prediction             | No
 ASE DB store         | No        | Yes    | Continue without cache    | No
 ML prediction        | No        | Yes    | Alternative model → DFT   | No
-ML relaxation        | No        | Yes    | Skip relaxation           | No
+ML relaxation        | Yes       | Yes    | Reject/flag for DFT       | No (skip candidate)
 Multi-obj ranking    | Yes       | No     | Simple weighted sum       | No
 ```
 
@@ -1476,9 +1902,9 @@ Multi-obj ranking    | Yes       | No     | Simple weighted sum       | No
   },
   
   "data_source_breakdown": {
-    "materials_project": 38,  # High confidence
-    "ase_cached": 24,          # Medium-high confidence
-    "ml_predicted": 15         # Medium confidence
+    "materials_project": 38,   # High confidence (DFT)
+    "ase_cached": 24,          # Medium-high confidence (cached from previous runs)
+    "ml_calculated": 15        # Medium confidence (MatGL predictions + matcalc calculations)
   },
   
   "top_candidates": [
