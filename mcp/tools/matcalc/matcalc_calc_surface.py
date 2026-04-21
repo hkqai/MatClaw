@@ -12,7 +12,7 @@ Use this tool to:
 - Screen materials for low-energy surfaces
 """
 
-from typing import Dict, Any, Optional, Union, Annotated, Tuple
+from typing import Dict, Any, Optional, Union, Annotated, List
 from pydantic import Field
 
 
@@ -29,11 +29,11 @@ def matcalc_calc_surface(
         )
     ],
     miller_index: Annotated[
-        Tuple[int, int, int],
+        List[int],
         Field(
             description=(
-                "Miller indices (h,k,l) specifying the surface plane to generate. "
-                "Common surfaces: (1,0,0), (1,1,0), (1,1,1). Example: (1,1,1) for "
+                "Miller indices [h,k,l] as a list of 3 integers specifying the surface plane to generate. "
+                "Common surfaces: [1,0,0], [1,1,0], [1,1,1]. Example: [1,1,1] for "
                 "the 111 surface of FCC crystals."
             )
         )
@@ -144,7 +144,7 @@ def matcalc_calc_surface(
     
     Args:
         structure_input: Bulk crystal structure (dict or CIF/POSCAR string)
-        miller_index: Miller indices (h,k,l) for surface plane
+        miller_index: Miller indices [h,k,l] as list of 3 integers for surface plane
         calculator: Force field or ML potential to use
         min_slab_size: Minimum slab thickness in Angstroms
         min_vacuum_size: Minimum vacuum gap in Angstroms

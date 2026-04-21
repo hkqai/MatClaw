@@ -33,7 +33,7 @@ def matgl_predict_bandgap(
             default="MEGNet-MP-2019.4.1-BandGap-mfi",
             description=(
                 "ML model to use for band gap prediction. Currently only one model is supported:\n"
-                "- MEGNet-MP-2019.4.1-BandGap-mfi (MatErials Graph Network trained on MP data)"
+                "- MEGNet-MP-2019.4.1-BandGap-mfi (Materials Graph Network trained on MP data)"
             )
         )
     ] = "MEGNet-MP-2019.4.1-BandGap-mfi",
