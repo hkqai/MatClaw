@@ -56,7 +56,17 @@ from tools.matgl import (
     matgl_predict_eform
 )
 from tools.matcalc import (
+    matcalc_calc_adsorption,
     matcalc_calc_elasticity,
+    matcalc_calc_energetics,
+    matcalc_calc_eos,
+    matcalc_calc_interface,
+    matcalc_calc_md,
+    matcalc_calc_neb,
+    matcalc_calc_phonon,
+    matcalc_calc_phonon3,
+    matcalc_calc_qha,
+    matcalc_calc_surface
 )
 from tools.chem_llm import (
     predict_molecule_binding,
@@ -158,7 +168,17 @@ mcp.tool()(matgl_predict_bandgap)
 mcp.tool()(matgl_predict_eform)
 
 # Material property calculation tools
+mcp.tool()(matcalc_calc_adsorption)
 mcp.tool()(matcalc_calc_elasticity)
+mcp.tool()(matcalc_calc_energetics)
+mcp.tool()(matcalc_calc_eos)
+mcp.tool()(matcalc_calc_interface)
+mcp.tool()(matcalc_calc_md)
+mcp.tool()(matcalc_calc_neb)
+mcp.tool()(matcalc_calc_phonon)
+mcp.tool()(matcalc_calc_phonon3)
+mcp.tool()(matcalc_calc_qha)
+mcp.tool()(matcalc_calc_surface)
 
 # Fine-tuned LLM prediction tools
 mcp.tool()(predict_molecule_binding)
