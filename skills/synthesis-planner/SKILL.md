@@ -5,7 +5,7 @@ description: Intelligent synthesis route planning for inorganic materials. Use t
 
 # Synthesis Route Planning Skill
 
-This skill orchestrates synthesis route generation using a strict prioritization:
+This skill orchestrates synthesis route generation using a strict 3-tier prioritization:
 1. **FIRST: Literature-validated routes** from Materials Project (high confidence, proven)
 2. **IF NONE FOUND: ML-predicted routes** for solid-state synthesis (medium confidence, data-driven)
 3. **ONLY IF ML FAILS: Template-based heuristic routes** (low confidence, requires validation)
@@ -18,196 +18,29 @@ The core philosophy: **Literature data is gold. ML predictions are silver. Templ
 
 ---
 
-## Tool Catalogue
+## Quick Tool Reference
 
-### 1. `mp_search_recipe` — Literature Recipe Search
-Queries Materials Project Synthesis Database for experimental synthesis procedures from published literature.
+For detailed tool specifications, see [Appendix: Detailed Tool Catalogue](#appendix-detailed-tool-catalogue) at the end of this document.
 
-**Key parameters:**
-- `target_formula`: Material composition (e.g., `'LiCoO2'`, `'BaTiO3'`)
-- `synthesis_type`: Filter by method (`'solid-state'`, `'sol-gel'`, `'hydrothermal'`, etc.)
-- `precursor_formula`: Find recipes using specific precursors
-- `format_routes`: If `True`, automatically converts recipes to standardized routes (eliminates need for separate conversion step!)
-- `limit`: Maximum number of recipes/routes to return (1-30, default 10). When `format_routes=True`, this controls the number of formatted routes returned.
-- `temperature_min`, `temperature_max`, `heating_time_min`, `heating_time_max`: Filter recipes by min/max temperature/time directly in the search
+### Synthesis Route Planning Tools (3-Tier Priority)
 
-**Returns (when format_routes=False):** 
-```python
-{
-  "success": True,
-  "count": 206,  # Number of literature recipes found
-  "recipes": [
-    {
-      "target_formula": "LiCoO2",
-      "precursors_formula_s": ["Li2CO3", "Co3O4"],
-      "synthesis_type": "solid-state",
-      "reaction_string": "0.333 Co3O4 + 0.5 Li2CO3 + 0.083 O2 == 1 LiCoO2 + 0.5 CO2",
-      "operations": [
-        {
-          "type": "heating",
-          "conditions": {"heating_temperature": [850], "heating_time": [12], "heating_atmosphere": ["air"]}
-        }
-      ]
-    }
-  ]
-}
-```
+| Tier | Tool | Purpose | When to Use | Limitations |
+|------|------|---------|-------------|-------------|
+| **1 (Highest)** | `mp_search_recipe` | Literature recipe search from Materials Project | **ALWAYS TRY FIRST** — proven experimental routes | Limited to ~10-20K materials with literature data |
+| **2 (Medium)** | `er_predict_precursors` | ML-based precursor prediction | No literature found, need solid-state route | **Solid-state only**, cannot do hydrothermal/sol-gel |
+| **2 (Medium)** | `er_predict_temperature` | ML-based temperature prediction | Have precursors, need temperature estimate | **Solid-state only**, ±50-100°C accuracy |
+| **3 (Last Resort)** | `template_route_generator` | Heuristic route generation | No literature & ML failed/inapplicable | Low confidence, requires human review |
 
-**Returns (when format_routes=True):**
-```python
-{
-  "success": True,
-  "target_composition": "LiCoO2",
-  "n_routes": 5,
-  "original_count": 206,  # Total recipes found before formatting
-  "filtered_count": 0,  # Number filtered by constraints
-  "routes": [
-    {
-      "route_id": 1,
-      "source": "literature",
-      "method": "solid_state",
-      "confidence": 0.90,
-      "precursors": [...],
-      "steps": [
-        {"step": 1, "action": "mix_and_grind", ...},
-        {"step": 2, "action": "calcine", "temperature_c": 850, ...}
-      ],
-      "doi": "10.1234/example",
-      "basis": "Literature-derived from Materials Project"
-    }
-  ]
-}
-```
+### Key Decision Points
 
-**When to use `format_routes=True` vs `False`:**
-- **Use `True`** when you need standardized synthesis routes ready for execution or planning (most common for synthesis planning)
-- **Use `False`** when you need raw recipe data for analysis, comparison, or custom processing of literature information
-- The `limit` parameter controls the number of recipes/routes returned (default 10, max 30)
+**Method selection:**
+- **Solid-state synthesis needed** → Use Tier 1 (literature) → If none, try Tier 2 (ML) → If fails, try Tier 3 (templates)
+- **Hydrothermal/sol-gel/other methods** → Use Tier 1 (literature) only, or Tier 3 (templates) if no literature exists
+  - **CANNOT use Tier 2 ML tools for non-solid-state methods**
 
-**Coverage:** ~10-20K materials with literature synthesis data. Common battery materials, perovskites, and simple oxides are well-represented.
-
----
-
-### 2. `er_predict_precursors` — ML Precursor Prediction (Solid-State Only)
-**NEW**: ML-based precursor prediction using trained neural networks on synthesis literature.
-
-**CRITICAL LIMITATION: SOLID-STATE SYNTHESIS ONLY.** Cannot be used for hydrothermal, sol-gel, or other synthesis methods.
-
-**Key parameters:**
-- `target_formula`: Material composition (e.g., `'Li7La3Zr2O12'`, `'BaTiO3'`)
-- `top_k`: Number of precursor sets to return (default 5, range 1-20)
-- `return_individual`: If True, also return individual element predictions (not yet implemented)
-
-**Returns:**
-```python
-{
-  "target": "Li7La3Zr2O12",
-  "precursor_sets": [
-    {"precursors": ["Li2CO3", "La2O3", "ZrO2"], "confidence": 0.6121},
-    {"precursors": ["Li2O", "La2O3", "ZrO2"], "confidence": 0.2341},
-    {"precursors": ["LiOH", "La2O3", "ZrO2"], "confidence": 0.0892}
-  ],
-  "top_prediction": {"precursors": ["Li2CO3", "La2O3", "ZrO2"], "confidence": 0.6121},
-  "metadata": {"model": "elemwise_retro", "device": "cpu"}
-}
-```
-
-**Confidence interpretation:**
-- **>0.5**: High confidence, precursors commonly used in literature
-- **0.2-0.5**: Medium confidence, reasonable alternatives
-- **<0.2**: Low confidence, less common combinations
-
-**When to use:**
-- No literature routes found in MP for this specific composition
-- User requests solid-state synthesis specifically
-- Target is inorganic oxide/oxysalt (model trained on these)
-
-**When NOT to use:**
-- Hydrothermal, sol-gel, CVD, or other non-solid-state methods
-- Organic-inorganic hybrids or MOFs
-- User explicitly requests literature-only routes
-
----
-
-### 3. `er_predict_temperature` — ML Temperature Prediction (Solid-State Only)
-**NEW**: ML-based synthesis temperature prediction given target and precursors.
-
-**CRITICAL LIMITATION: SOLID-STATE SYNTHESIS ONLY.** Cannot be used for hydrothermal, sol-gel, or other synthesis methods.
-
-**Key parameters:**
-- `target_formula`: Material composition (e.g., `'Li7La3Zr2O12'`)
-- `precursors`: List of precursor formulas (e.g., `['Li2CO3', 'La2O3', 'ZrO2']`)
-
-**Returns:**
-```python
-{
-  "target": "Li7La3Zr2O12",
-  "precursors": ["Li2CO3", "La2O3", "ZrO2"],
-  "temperature_celsius": 908.3,
-  "temperature_kelvin": 1181.5,
-  "metadata": {"model": "elemwise_retro", "device": "cpu"}
-}
-```
-
-**Typical accuracy:**
-- Mean absolute error: ±50-100°C on test set
-- Use as starting point, not definitive temperature
-- Cross-check with similar materials in literature
-
-**When to use:**
-- Have precursor set (from `er_predict_precursors` or other source)
-- Need temperature estimate for solid-state synthesis
-- No literature temperature data available
-
-**When NOT to use:**
-- Hydrothermal, sol-gel, CVD, or other non-solid-state methods
-- Literature routes already provide temperature
-- Precursors contain elements not in target (will raise error)
-
-**Element validation:**
-- Tool validates that precursor elements match target elements
-- Raises `ValueError` if mismatch detected
-- Ensures chemical consistency
-
----
-
-### 4. `template_route_generator` — Heuristic Route Generation
-Generates template-based synthesis routes using Materials Project precursor data and heuristic process parameters.
-
-**Key parameters:**
-- `target_material`: `{'composition': 'LiCoO2'}`
-- `synthesis_method`: `'solid_state'`, `'hydrothermal'`, `'sol_gel'`, or `'auto'`
-- `constraints`: Optional limits (`max_temperature`, `max_time`, `exclude_precursors`, etc.)
-
-**Returns:**
-```python
-{
-  "success": True,
-  "target_composition": "LiCoO2",
-  "routes": [
-    {
-      "method": "solid_state",
-      "source": "template_with_mp_precursors",
-      "confidence": 0.40,  # Low - unvalidated heuristic
-      "precursors": [...],  # From MP literature for this material
-      "steps": [...],  # From heuristic templates
-      "requires_review": True,  # Human approval needed
-      "warnings": ["Using 206 recipes from Materials Project for precursor selection"]
-    }
-  ]
-}
-```
-
-**Key characteristics:**
-- Uses MP to find precursors actually used for this material in literature
-- Applies template-based heuristics for temperatures/times/steps
-- Lower confidence than literature routes
-- Requires human review before autonomous execution
-
-**When templates are used:**
-- No literature recipes exist in MP for this material
-- User explicitly requests template generation
-- User provides constraints that filter out all literature routes
+**When to use `format_routes=True` in `mp_search_recipe`:**
+- Set `True` when you need standardized routes ready for execution (most common)
+- Set `False` when you need raw recipe data for analysis or custom processing
 
 ---
 
@@ -960,9 +793,9 @@ xrd_result = characterization_protocol_generator(
 
 ---
 
-## Quick Reference
+## Function Signatures & Code Examples
 
-### Function Signatures (Copy-Paste Ready)
+### Copy-Paste Ready Function Signatures
 
 ```python
 # 1a. Search Materials Project for standardized synthesis routes
@@ -1020,5 +853,200 @@ template_routes = template_route_generator(
 **GOLDEN RULE: ALWAYS search mp_search_recipe first. Use ML predictions for solid-state if no literature. Only use template_route_generator as last resort.**
 
 **Note:** Use `format_routes=True` when you need standardized routes for synthesis planning. Use `format_routes=False` when you need raw recipe data for analysis or comparison.
+
+---
+
+## Appendix: Detailed Tool Catalogue
+
+This appendix provides complete specifications for all synthesis planning tools, including detailed parameter lists, return formats, use cases, and examples. Refer to the [Quick Tool Reference](#quick-tool-reference) section for a concise overview organized by priority tier.
+
+### 1. `mp_search_recipe` — Literature Recipe Search
+Queries Materials Project Synthesis Database for experimental synthesis procedures from published literature.
+
+**Key parameters:**
+- `target_formula`: Material composition (e.g., `'LiCoO2'`, `'BaTiO3'`)
+- `synthesis_type`: Filter by method (`'solid-state'`, `'sol-gel'`, `'hydrothermal'`, etc.)
+- `precursor_formula`: Find recipes using specific precursors
+- `format_routes`: If `True`, automatically converts recipes to standardized routes (eliminates need for separate conversion step!)
+- `limit`: Maximum number of recipes/routes to return (1-30, default 10). When `format_routes=True`, this controls the number of formatted routes returned.
+- `temperature_min`, `temperature_max`, `heating_time_min`, `heating_time_max`: Filter recipes by min/max temperature/time directly in the search
+
+**Returns (when format_routes=False):** 
+```python
+{
+  "success": True,
+  "count": 206,  # Number of literature recipes found
+  "recipes": [
+    {
+      "target_formula": "LiCoO2",
+      "precursors_formula_s": ["Li2CO3", "Co3O4"],
+      "synthesis_type": "solid-state",
+      "reaction_string": "0.333 Co3O4 + 0.5 Li2CO3 + 0.083 O2 == 1 LiCoO2 + 0.5 CO2",
+      "operations": [
+        {
+          "type": "heating",
+          "conditions": {"heating_temperature": [850], "heating_time": [12], "heating_atmosphere": ["air"]}
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Returns (when format_routes=True):**
+```python
+{
+  "success": True,
+  "target_composition": "LiCoO2",
+  "n_routes": 5,
+  "original_count": 206,  # Total recipes found before formatting
+  "filtered_count": 0,  # Number filtered by constraints
+  "routes": [
+    {
+      "route_id": 1,
+      "source": "literature",
+      "method": "solid_state",
+      "confidence": 0.90,
+      "precursors": [...],
+      "steps": [
+        {"step": 1, "action": "mix_and_grind", ...},
+        {"step": 2, "action": "calcine", "temperature_c": 850, ...}
+      ],
+      "doi": "10.1234/example",
+      "basis": "Literature-derived from Materials Project"
+    }
+  ]
+}
+```
+
+**When to use `format_routes=True` vs `False`:**
+- **Use `True`** when you need standardized synthesis routes ready for execution or planning (most common for synthesis planning)
+- **Use `False`** when you need raw recipe data for analysis, comparison, or custom processing of literature information
+- The `limit` parameter controls the number of recipes/routes returned (default 10, max 30)
+
+**Coverage:** ~10-20K materials with literature synthesis data. Common battery materials, perovskites, and simple oxides are well-represented.
+
+---
+
+### 2. `er_predict_precursors` — ML Precursor Prediction (Solid-State Only)
+**NEW**: ML-based precursor prediction using trained neural networks on synthesis literature.
+
+**CRITICAL LIMITATION: SOLID-STATE SYNTHESIS ONLY.** Cannot be used for hydrothermal, sol-gel, or other synthesis methods.
+
+**Key parameters:**
+- `target_formula`: Material composition (e.g., `'Li7La3Zr2O12'`, `'BaTiO3'`)
+- `top_k`: Number of precursor sets to return (default 5, range 1-20)
+- `return_individual`: If True, also return individual element predictions (not yet implemented)
+
+**Returns:**
+```python
+{
+  "target": "Li7La3Zr2O12",
+  "precursor_sets": [
+    {"precursors": ["Li2CO3", "La2O3", "ZrO2"], "confidence": 0.6121},
+    {"precursors": ["Li2O", "La2O3", "ZrO2"], "confidence": 0.2341},
+    {"precursors": ["LiOH", "La2O3", "ZrO2"], "confidence": 0.0892}
+  ],
+  "top_prediction": {"precursors": ["Li2CO3", "La2O3", "ZrO2"], "confidence": 0.6121},
+  "metadata": {"model": "elemwise_retro", "device": "cpu"}
+}
+```
+
+**Confidence interpretation:**
+- **>0.5**: High confidence, precursors commonly used in literature
+- **0.2-0.5**: Medium confidence, reasonable alternatives
+- **<0.2**: Low confidence, less common combinations
+
+**When to use:**
+- No literature routes found in MP for this specific composition
+- User requests solid-state synthesis specifically
+- Target is inorganic oxide/oxysalt (model trained on these)
+
+**When NOT to use:**
+- Hydrothermal, sol-gel, CVD, or other non-solid-state methods
+- Organic-inorganic hybrids or MOFs
+- User explicitly requests literature-only routes
+
+---
+
+### 3. `er_predict_temperature` — ML Temperature Prediction (Solid-State Only)
+**NEW**: ML-based synthesis temperature prediction given target and precursors.
+
+**CRITICAL LIMITATION: SOLID-STATE SYNTHESIS ONLY.** Cannot be used for hydrothermal, sol-gel, or other synthesis methods.
+
+**Key parameters:**
+- `target_formula`: Material composition (e.g., `'Li7La3Zr2O12'`)
+- `precursors`: List of precursor formulas (e.g., `['Li2CO3', 'La2O3', 'ZrO2']`)
+
+**Returns:**
+```python
+{
+  "target": "Li7La3Zr2O12",
+  "precursors": ["Li2CO3", "La2O3", "ZrO2"],
+  "temperature_celsius": 908.3,
+  "temperature_kelvin": 1181.5,
+  "metadata": {"model": "elemwise_retro", "device": "cpu"}
+}
+```
+
+**Typical accuracy:**
+- Mean absolute error: ±50-100°C on test set
+- Use as starting point, not definitive temperature
+- Cross-check with similar materials in literature
+
+**When to use:**
+- Have precursor set (from `er_predict_precursors` or other source)
+- Need temperature estimate for solid-state synthesis
+- No literature temperature data available
+
+**When NOT to use:**
+- Hydrothermal, sol-gel, CVD, or other non-solid-state methods
+- Literature routes already provide temperature
+- Precursors contain elements not in target (will raise error)
+
+**Element validation:**
+- Tool validates that precursor elements match target elements
+- Raises `ValueError` if mismatch detected
+- Ensures chemical consistency
+
+---
+
+### 4. `template_route_generator` — Heuristic Route Generation
+Generates template-based synthesis routes using Materials Project precursor data and heuristic process parameters.
+
+**Key parameters:**
+- `target_material`: `{'composition': 'LiCoO2'}`
+- `synthesis_method`: `'solid_state'`, `'hydrothermal'`, `'sol_gel'`, or `'auto'`
+- `constraints`: Optional limits (`max_temperature`, `max_time`, `exclude_precursors`, etc.)
+
+**Returns:**
+```python
+{
+  "success": True,
+  "target_composition": "LiCoO2",
+  "routes": [
+    {
+      "method": "solid_state",
+      "source": "template_with_mp_precursors",
+      "confidence": 0.40,  # Low - unvalidated heuristic
+      "precursors": [...],  # From MP literature for this material
+      "steps": [...],  # From heuristic templates
+      "requires_review": True,  # Human approval needed
+      "warnings": ["Using 206 recipes from Materials Project for precursor selection"]
+    }
+  ]
+}
+```
+
+**Key characteristics:**
+- Uses MP to find precursors actually used for this material in literature
+- Applies template-based heuristics for temperatures/times/steps
+- Lower confidence than literature routes
+- Requires human review before autonomous execution
+
+**When templates are used:**
+- No literature recipes exist in MP for this material
+- User explicitly requests template generation
+- User provides constraints that filter out all literature routes
 
 ---

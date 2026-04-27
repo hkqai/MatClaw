@@ -22,420 +22,45 @@ using `ase_store_result` so nothing is recomputed.
 
 ---
 
-## Tool Catalogue
-
-### Phase 0 Tools: Composition Discovery
-
-### 0A. `composition_enumerator` — Oxidation-Balanced Enumeration
-Generates all charge-balanced compositions from element lists and oxidation state constraints.
-Use when you know which elements to explore but not which compositions exist.
-
-**Key parameters:**
-- `elements`: list of element symbols, e.g. `['Li', 'Mn', 'P', 'O']`
-- `oxidation_states`: dict mapping elements to allowed oxidation states, e.g. `{'Li': [1], 'Mn': [2, 3], 'P': [5], 'O': [-2]}`
-- `max_formula_units`: cap on formula unit count (default 6, increase for complex compositions)
-- `max_atoms_per_formula`: hard limit on total atoms (default 30, prevents combinatorial explosion)
-- `anion_cation_ratio_max`: maximum anion:cation ratio (default 4.0, excludes Li₁Mn₁₀P₁₀O₅₀-type nonsense)
-- `min_cation_fraction`: minimum cation fraction (default 0.05, excludes Li₀.₀₁O₀.₉₉-type nonsense)
-- `require_all_elements`: if True, only returns compositions containing ALL specified elements (default True)
-- `allow_mixed_valence`: if True, allows mixed oxidation states (e.g., Mn²⁺/Mn³⁺ in mixed-valence manganates) (default True)
-- `sort_by`: `'atoms'` (fewest atoms first), `'anion_ratio'` (lowest O/cation ratio), `'alphabetical'`
-- `output_format`: `'minimal'` (formula strings) or `'detailed'` (full metadata)
-
-**Returns:**
-```python
-{
-  "success": True,
-  "count": 12,
-  "compositions": [
-    "Li3PO4",
-    "LiMnPO4",  # Target composition! (olivine battery cathode)
-    "LiFePO4",  # If Fe added to oxidation_states
-    ...
-  ],
-  # OR with output_format='detailed':
-  "compositions": [
-    {
-      "formula": "LiMnPO4",
-      "reduced_formula": "LiMnPO4",
-      "num_atoms": 7,
-      "cation_count": 3,
-      "anion_count": 4,
-      "anion_cation_ratio": 1.33,
-      "oxidation_states": {"Li": 1, "Mn": 2, "P": 5, "O": -2},
-      "charge": 0
-    },
-    ...
-  ]
-}
-```
-
-**Chemical filters explained:**
-- `max_atoms_per_formula=30`: Prevents unrealistically large formulas (e.g., Li₁₀Mn₁₀P₁₀O₄₀ with 70 atoms)
-- `anion_cation_ratio_max=4.0`: Prevents anion-heavy compositions (e.g., LiMn₁₀P₁₀O₅₀ with ratio ≈ 2.4)
-- `min_cation_fraction=0.05`: Prevents trace cation compositions (e.g., Li₀.₀₁Mn₀.₉₉O unphysical)
-
-**When to adjust defaults:**
-- Increase `max_formula_units` for complex phases (spinels, Ruddlesden-Popper)
-- Decrease `anion_cation_ratio_max` for metal-rich compounds
-- Set `require_all_elements=False` to include binaries (e.g., Li₂O, Mn₃O₄) alongside ternaries/quaternaries
-
-**Workflow:**
-1. Call `composition_enumerator` with target elements
-2. Filter results by `stability_analyzer` (eliminate compositions far above convex hull)
-3. For each stable composition, proceed to Phase 1 (prototype_builder) or query MP for existing structures
-
----
-
-### 0B. `pymatgen_substitution_predictor` — ICSD-Based Substitution
-Predicts likely element substitutions using data mining from 100k+ ICSD structures.
-Use when you have a known composition and want to find chemically reasonable analogues.
-
-**Key parameters:**
-- `composition`: starting composition, e.g. `'LiFePO4'`
-- `to_this_composition`: if False (default), finds what this composition can become; if True, finds what can transform INTO this composition
-- `threshold`: probability cutoff (0.001 = permissive, 0.1 = strict)
-- `max_suggestions`: limit number of suggestions (default None = unlimited)
-- `group_by_probability`: if True, returns {high: [...], medium: [...], low: [...]}
-
-**Returns:**
-```python
-{
-  "success": True,
-  "original_composition": "LiFePO4",
-  "direction": "from_this_composition",
-  "suggestions": {
-    "high": [{"formula": "LiMnPO4", "probability": 0.85}, ...],
-    "medium": [{"formula": "LiCoPO4", "probability": 0.45}, ...],
-    "low": [{"formula": "LiNiPO4", "probability": 0.02}, ...]
-  }
-}
-```
-
-**Use case: Template-based discovery**
-```python
-# Find what LiFePO₄ can transform into
-result = pymatgen_substitution_predictor('LiFePO4', threshold=0.01)
-
-# Extract high-confidence suggestions
-target_formulas = [s['formula'] for s in result['suggestions']['high']]
-
-# For each, check MP for structures
-for formula in target_formulas:
-    mp_result = mp_search_materials(formula=formula)
-    if mp_result['count'] > 0:
-        # Structure exists in MP, can use directly
-```
-
-**Limitation:** ICSD substitution patterns are conservative (based on existing materials).
-For truly novel compositions (e.g., where no close analogues exist in the database),
-use `composition_enumerator` instead.
-
----
-
-### 0C. `mp_search_materials` — Template Structure Search
-Queries Materials Project for structures matching composition/chemistry constraints.
-Use to find structural templates for target element systems.
-
-**Key parameters for template search:**
-- `elements`: list of elements, e.g. `['Li', 'Fe', 'P', 'O']` (finds all Li-Fe-P-O compounds)
-- `num_elements`: constrain to binary (2), ternary (3), quaternary (4), etc.
-- `crystal_system`: `'cubic'`, `'tetragonal'`, `'orthorhombic'`, etc. (omit for all)
-- `spacegroup_number`: specific space group (e.g., 225 for fluorite)
-- `is_stable`: True (only thermodynamically stable), False (include metastable)
-- `limit`: max results (default 100)
-
-**Template discovery workflow:**
-```python
-# Step 1: Find analogues with similar chemistry (Fe instead of Mn)
-li_fe_p_o = mp_search_materials(
-    elements=['Li', 'Fe', 'P', 'O'],
-    num_elements=4,
-    is_stable=True,
-    limit=50
-)
-
-# Step 2: Extract stoichiometric patterns
-patterns = set()
-for mat in li_fe_p_o['materials']:
-    # Identify pattern: LiMPO₄, Li₃M₂(PO₄)₃, etc.
-    patterns.add(mat['composition_reduced'])
-
-# Step 3: Use patterns to constrain composition_enumerator
-if 'NaMnPO4' in patterns:
-    # Found olivine pattern (AMPO₄)! Prioritize compositions around 7 atoms
-    result = composition_enumerator(
-        elements=['Li', 'Mn', 'P', 'O'],
-        oxidation_states={'Li': [1], 'Mn': [2], 'P': [5], 'O': [-2]},
-        max_formula_units=8  # Allows LiMnPO₄ (7 atoms)
-    )
-```
-
-**When no direct templates exist:**
-If `mp_search_materials(['Li', 'Mn', 'P', 'O'])` returns 0 results, try:
-1. Substitute one element: `['Na', 'Mn', 'P', 'O']` or `['Li', 'Fe', 'P', 'O']`
-2. Search broader family: `['alkali', 'TM', 'P', 'O']` where TM = transition metal
-3. Fall back to `composition_enumerator` (exhaustive enumeration)
-
----
-
-### Phase 1-5 Tools: Structure Generation
-
-### 1. `pymatgen_prototype_builder` — Seed Structure
-Builds an ideal crystal from a spacegroup number/symbol, species list, and lattice parameters.
-This is the **entry point** for any workflow that starts from scratch rather than an existing structure.
-
-**Key parameters:**
-- `spacegroup`: int (1–230) or Hermann-Mauguin symbol, e.g. `225` or `"Fm-3m"`
-- `species`: list of element symbols (`['La', 'Mn', 'O', 'O', 'O']`) or Wyckoff dict
-- `lattice_parameters`: `[a, b, c, alpha, beta, gamma]` in Å and degrees; `[a]` works for cubic
-- `wyckoff_positions`: optional dict mapping Wyckoff labels to species/coords
-- `output_format`: `'dict'` (default, pass to other tools), `'poscar'`, `'cif'`, `'ase'`
-
-**Returns:** `structures[i].structure` — pass directly to substitution, enumeration, or defect tools.
-
-**`wyckoff_positions` proximity gotcha:** Passing a Wyckoff dict (e.g. `{'1a': 'Ba', '1b': 'Ti', '3c': 'O'}`) can raise
-"sites less than 0.01 Å apart" for multi-species prototypes where pymatgen auto-generates
-overlapping fractional coords. **Preferred approach:** supply explicit `species` and `coords` lists
-instead, and use `validate_proximity=False` when debugging a new prototype before finalising
-lattice parameters.
-
----
-
-### 2. `pymatgen_substitution_generator` — Ordered Enumeration of Site Replacements
-Replaces elements in existing structures by FULLY replacing specific sites, generating ORDERED
-structures with integer occupancy. Best for isostructural analogue screening across a fixed
-lattice topology.
-
-**CRITICAL: This tool creates ORDERED structures, NOT fractional occupancy.**
-- `fraction=0.15` means "fully replace 15% of sites" (1 site out of 6 → integer occupancy)
-- Output: Multiple ordered variants where specific sites are 100% replaced
-- Example: `{'Ni': {'replace_with': 'Mn', 'fraction': 0.2}}` with 5 Ni sites generates
-  5 structures, each with 1 different Ni site fully replaced by Mn
-- For fractional occupancy (80% Ni + 20% Mn on same site), use `pymatgen_disorder_generator`
-
-**Key parameters:**
-- `substitutions`: `{'Li': 'Na'}` (full swap), `{'Li': ['Na', 'K']}` (one variant per replacement),
-  `{'Li': {'replace_with': 'Na', 'fraction': 0.5}}` (FULLY replace 50% of Li sites, not partial occupancy)
-- `n_structures`: variants to generate **per substitution combination** (default 5).
-  For deterministic full swaps (`fraction=1.0`) set this to **1** — higher values only
-  produce identical duplicates. For partial site replacement (`fraction < 1.0`), generates
-  different random orderings. Total output = `n_structures × num_combinations`, capped by `max_attempts`.
-- `max_attempts`: **hard cap on total output count** (default 50). If you supply N
-  substitution options with n_structures=k, set `max_attempts ≥ N × k` or outputs
-  will be silently truncated. Example: 8 B-site metals with n_structures=1 needs
-  `max_attempts=8` (or higher); with n_structures=3 needs `max_attempts=24`.
-- `enforce_charge_neutrality`: set `True` for ionic materials
-- `site_selector`: `'all'`, `'wyckoff_4a'`, `'coordination_6'`, etc.
-- `preserve_disorder`: preserves existing disorder in inputs (does NOT create fractional occupancy)
-
-**When to use over `ion_exchange_generator`:** when you want exploratory doping without
-strict stoichiometry adjustment and charge neutrality is handled manually or checked post-hoc.
-
-**When to use over `disorder_generator`:** when you need ordered enumerated configurations
-for exhaustive DFT calculations or supercell enumeration, NOT for creating statistical disorder.
-
----
-
-### 3. `pymatgen_ion_exchange_generator` — Charge-Neutral Substitution
-Replaces a mobile ion (e.g. Li⁺) with one or more ions, **automatically adjusting stoichiometry**
-so that total ionic charge is conserved. Only charge-neutral structures are returned by default.
-
-**Key parameters:**
-- `replace_ion`: element to replace, e.g. `'Li'`
-- `with_ions`: `['Na', 'K']` (equal weight) or `{'Na': 0.6, 'Mg': 0.4}` (weighted split)
-- `exchange_fraction`: fraction of sites to exchange (0–1), default `1.0`
-- `allow_oxidation_state_change`: `False` (default) = only neutral structures returned
-- `max_structures`: cap on returned structures per input (default 10)
-
-**Prototypical use cases:** Li → Na/K battery cathode analogues, Ca²⁺ → La³⁺ doping in oxides.
-
----
-
-### 3A. `pymatgen_disorder_generator` — Add Configurational Disorder (Order → Disorder)
-***** REQUIRED TOOL FOR FRACTIONAL SITE OCCUPANCY *****
-
-Converts **fully ordered structures** into disordered structures with FRACTIONAL site occupancies.
-This is the ONLY tool for creating partial substitution materials like Li[Ni₀.₈Mn₀.₂]O₂ where
-ALL sites of an element have mixed occupancy (e.g., every Ni site becomes 80% Ni + 20% Mn).
-
-**CRITICAL: This tool creates FRACTIONAL OCCUPANCY, not ordered enumeration.**
-- Creates structures where sites have partial occupancy (e.g., 80% Ni + 20% Mn on same site)
-- Output: Single disordered structure per input with fractional composition
-- Example: `{'Ni': {'Ni': 0.8, 'Mn': 0.2}}` creates Li₃[Ni₂.₄Mn₀.₆]O₆ (statistical disorder)
-- For ordered enumerated configurations, use `pymatgen_substitution_generator` instead
-
-This is the inverse of enumeration: creates the disordered input structures needed for SQS
-generation or systematic enumeration.
-
-**Key parameters:**
-- `site_substitutions`: dict mapping elements to their disordered (fractional) occupancies
-  - Format: `{element: {species1: fraction1, species2: fraction2, ...}}`
-  - Binary mixing: `{'Ni': {'Ni': 0.8, 'Mn': 0.2}}` — Li[Ni₀.₈Mn₀.₂]O₂
-  - Ternary mixing: `{'Co': {'Ni': 0.333, 'Mn': 0.333, 'Co': 0.334}}` — NMC
-  - Fractions must sum to 1.0 (±`composition_tolerance`)
-- `site_selector`: strategy for which sites receive disorder (default: `'all_equivalent'`)
-  - `'all_equivalent'`: apply to all symmetry-equivalent sites (recommended)
-  - `'wyckoff_4a'`: specific Wyckoff position
-  - `'first_site'`: only first occurrence (breaks symmetry, use with caution)
-- `validate_charge_neutrality`: `True` (default) — warns if disorder creates charge imbalance
-- `composition_tolerance`: tolerance for fraction sums (default 0.01 = 1%)
-
-**Typical workflow:**
-```python
-# Step 1: Get ordered structure from Materials Project
-mp_result = mp_get_material_properties(
-    material_ids=["mp-1097088"],  # LiNiO₂
-    properties=["structure"]
-)
-
-# Step 2: Add disorder for partial substitution Li[Ni₀.₈Mn₀.₂]O₂
-disordered = pymatgen_disorder_generator(
-    input_structures=mp_result["properties"][0]["structure"],
-    site_substitutions={"Ni": {"Ni": 0.8, "Mn": 0.2}}  # 80% Ni, 20% Mn on TM sites
-)
-
-# Step 3: Generate SQS for DFT calculations
-sqs = pymatgen_sqs_generator(
-    input_structures=disordered["structures"],
-    supercell_size=16,
-    n_structures=3
-)
-```
-
-**Use cases:**
-- Battery cathodes: Li[Ni₀.₈Mn₀.₂]O₂, Li[Ni₀.₆Mn₀.₂Co₀.₂]O₂ (NMC622), (Li,Na)CoO₂
-- Perovskite oxides: La[Mn₀.₇Fe₀.₃]O₃, (Ca,Sr)TiO₃
-- High-entropy materials: (Mg,Co,Ni,Cu,Zn)O with equimolar mixing
-- Doped semiconductors: Si_{1-x}Ge_x, Al_xGa_{1-x}N
-- Mixed anion systems: Li₂O_{1-x}F_x
-
-**When to use:** When you have an ordered parent structure (from MP or prototype) and need
-to model a specific composition with fractional occupancies. Output is deterministic (one
-disordered structure per input) and ready for SQS or enumeration.
-
----
-
-### 3B. Tool Selection: `disorder_generator` vs `substitution_generator`
-
-**The Critical Distinction:**
-
-| Aspect | `pymatgen_disorder_generator` | `pymatgen_substitution_generator` |
-|--------|-------------------------------|-----------------------------------|
-| **Output type** | Fractional occupancy (statistical disorder) | Integer occupancy (ordered enumeration) |
-| **Site occupancy** | Multiple species on same site with fractions summing to 1 | Single species per site (occu=1) |
-| **Example** | Site has 80% Ni + 20% Mn | Site 1 has 100% Mn, Sites 2-5 have 100% Ni |
-| **Formula** | Li₃[Ni₂.₄Mn₀.₆]O₆ (fractional) | LiNi₄MnO₁₀ (integer, ordered) |
-| **Output count** | 1 disordered structure per input | Multiple ordered configurations per input |
-| **Use for** | SQS generation, VCA calculations, statistical models | Supercell enumeration, exhaustive DFT, specific orderings |
-
-**Decision Tree:**
-
-```
-Do you need partial substitution like Li[Ni₀.₈Mn₀.₂]O₂?
-├─ YES: Do you want fractional occupancy (every site has 80%Ni+20%Mn)?
-│  ├─ YES → Use `pymatgen_disorder_generator`
-│  │         site_substitutions={'Ni': {'Ni': 0.8, 'Mn': 0.2}}
-│  │         → Output: 1 structure with fractional occupancy
-│  │         → Then: pymatgen_sqs_generator for quasirandom supercells
-│  │
-│  └─ NO: Want ordered enumeration (1 specific Ni replaced per structure)?
-│     └─ YES → Use `pymatgen_substitution_generator`
-│               substitutions={'Ni': {'replace_with': 'Mn', 'fraction': 0.2}}
-│               → Output: 5 structures, each with different Ni site replaced
-│               → Then: Run DFT on each ordered configuration
-│
-└─ NO: Complete substitution (all Li → Na)?
-   └─ Use `pymatgen_substitution_generator`
-      substitutions={'Li': 'Na'}
-      → Output: 1 structure with all Li replaced by Na
-```
-
-**Common Pitfalls:**
-- ❌ Using `substitution_generator` with `fraction=0.15` expecting fractional occupancy
-  - Result: Ordered structure with 1 site fully replaced, not statistical disorder
-- ❌ Using `disorder_generator` when you want to explore specific orderings
-  - Result: Single averaged structure, cannot enumerate configurational space
-- ❌ Setting `preserve_disorder=True` in `substitution_generator` expecting it to create disorder
-  - Result: Only preserves existing disorder, does not create new fractional occupancy
-
-**Research examples:**
-- Li[Ni₀.₈Mn₀.₂]O₂ battery cathode → `disorder_generator` → `sqs_generator`
-- La[Mn₁₋ₓFeₓ]O₃ perovskite (x=0.1-0.5) → `disorder_generator`
-- Screening A-site metals in ABO₃ perovskites → `substitution_generator` with `['Ca','Sr','Ba']`
-
----
-
-### 4. `pymatgen_enumeration_generator` — Exhaustive Ordering of Disordered Structures
-Takes structures with **fractional site occupancies** and returns all symmetry-inequivalent
-ordered supercell approximants, ranked by Ewald energy or cell size.
-
-**Key parameters:**
-- `supercell_size`: supercell multiplier (1–4, default 2); creates a supercell of size
-  `[supercell_size, supercell_size, 1]` to accommodate fractional occupancies. Keep ≤ 2
-  for ternaries to avoid combinatorial explosion
-- `n_structures`: max ordered structures returned per input (default 20, max 500)
-- `sort_by`: `'ewald'` (default, lowest energy first), `'num_sites'`, `'random'`
-- `add_oxidation_states`: auto-assign oxidation states for Ewald ranking (default `True`)
-- `refine_structure`: re-symmetrize before enumeration (recommended, default `True`)
-
-
-**When to use over `sqs_generator`:** when you need the complete ordered-configuration pool,
-want to identify the ground-state ordering, or are building a cluster expansion training set.
-
----
-
-### 5. `pymatgen_sqs_generator` — Special Quasirandom Structures
-Finds a small ordered supercell whose Warren-Cowley pair correlations best mimic a
-perfectly random alloy. Returns the **single best quasirandom approximant** per input,
-not the full ordered-configuration space.
-
-**Key parameters:**
-- `supercell_size`: target formula units in SQS cell (default 8; use 8–16 for binary, 12–24 for ternary)
-- `supercell_matrix`: explicit `[nx, ny, nz]` or 3×3 matrix (overrides `supercell_size`)
-- `n_structures`: independent SQS candidates per input (default 3); ranked by `sqs_error`
-- `n_mc_steps`: Monte Carlo steps per candidate (default 50 000; increase for multicomponent)
-- `n_shells`: correlation shells in objective function (default 4)
-- `seed`: set for reproducibility
-- `use_mcsqs`: use ATAT `mcsqs` binary if available (better quality for large systems)
-
-**When to use over `enumeration_generator`:** target system is a solid solution / high-entropy
-material where disorder is the physical state being modelled, not a defect to be minimised.
-
----
-
-### 6. `pymatgen_defect_generator` — Point Defect Supercells
-Takes a **perfect bulk host structure** and generates one supercell per symmetry-inequivalent
-defect site. Supports vacancies, substitutional dopants, and interstitials.
-
-**Key parameters:**
-- `vacancy_species`: `['Li', 'O']` — generate V_Li, V_O defects
-- `substitution_species`: `{'Fe': ['Mn', 'Co']}` — Mn_Fe and Co_Fe substitutionals
-- `interstitial_species`: `['Li']` — find void sites and insert Li
-- `charge_states`: `{'V_Li': [-1, 0, 1]}` — metadata only; structures are always neutral geometry
-- `supercell_min_atoms`: target atoms in defect supercell (default 64; 64–128 for plane-wave DFT)
-- `inequivalent_only`: `True` (default) — generate only symmetry-distinct defects
-
-**Downstream:** feed outputs to `pymatgen_perturbation_generator` to rattle defect geometries,
-or save directly to the ASE database via `ase_store_result`.
-
----
-
-### 7. `pymatgen_perturbation_generator` — Structural Ensemble / Augmentation
-Applies random atomic displacements ("rattling") and/or lattice strain to create ensembles
-of perturbed structures. Does **not** change composition.
-
-**Key parameters:**
-- `displacement_max`: max displacement per atom in Å (default 0.1; typical range 0.05–0.2)
-- `strain_percent`: `None` (off), scalar (uniform), `[min, max]` (random range), or
-  6-element Voigt tensor `[e_xx, e_yy, e_zz, e_xy, e_xz, e_yz]`
-- `n_structures`: perturbed copies per input (default 10, max 200)
-- `seed`: for reproducibility
-
-**Primary uses:**
-- Provide DFT starting geometries that are not stuck at a symmetry saddle point
-- Augment ML training datasets with off-equilibrium configurations
-- Generate strained cells for elastic property screening
+## Quick Tool Reference
+
+For detailed tool specifications, see [Appendix: Detailed Tool Catalogue](#appendix-detailed-tool-catalogue) at the end of this document.
+
+### Phase 0: Composition Discovery
+| Tool | Purpose | When to Use |
+|------|---------|-------------|
+| `composition_enumerator` | Generate all charge-balanced compositions from elements | Systematic exploration of element systems (Li-Mn-P-O) |
+| `pymatgen_substitution_predictor` | ICSD-based element substitution predictions | Find likely analogues of known materials (LiFePO₄ → LiMnPO₄) |
+| `mp_search_materials` | Find Materials Project template structures | Discover structural patterns in chemical systems |
+
+### Phase 1-5: Structure Generation
+| Tool | Purpose | When to Use |
+|------|---------|-------------|
+| **Phase 1: Seed Structure** | | |
+| `pymatgen_prototype_builder` | Build crystal from spacegroup + species | Create ideal structure from scratch or prototype |
+| **Phase 2: Chemical Exploration** | | |
+| `pymatgen_substitution_generator` | **Ordered enumeration** with integer occupancy | Screen isostructural analogues, ordered configurations |
+| `pymatgen_ion_exchange_generator` | Charge-neutral ion substitution | Battery ion swaps (Li→Na), charge-balanced doping |
+| **Phase 3: Add Disorder** | | |
+| `pymatgen_disorder_generator` | **Fractional occupancy** (statistical disorder) | Create Li[Ni₀.₈Mn₀.₂]O₂-type partial substitutions |
+| **Phase 4: Resolve Disorder** | | |
+| `pymatgen_enumeration_generator` | Exhaustive ordered configurations from disorder | Complete configurational space, ground-state search |
+| `pymatgen_sqs_generator` | Special quasirandom structures | Best random-alloy approximant for solid solutions |
+| **Phase 5: Defects & Augmentation** | | |
+| `pymatgen_defect_generator` | Point defect supercells (vacancies, dopants, interstitials) | Defect studies, doping analysis |
+| `pymatgen_perturbation_generator` | Rattle atoms + strain lattice | Ensemble generation, avoid symmetry traps |
+
+### Critical Tool Distinction
+
+**`disorder_generator` vs `substitution_generator`** — Most important decision:
+
+| Aspect | `disorder_generator` | `substitution_generator` |
+|--------|---------------------|-------------------------|
+| **Output** | Fractional occupancy (statistical) | Integer occupancy (ordered) |
+| **Site occupancy** | 80% Ni + 20% Mn on same site | Site 1: 100% Mn; Sites 2-5: 100% Ni |
+| **Example** | Li₃[Ni₂.₄Mn₀.₆]O₆ | LiNi₄MnO₁₀ (ordered variant) |
+| **Output count** | 1 disordered structure per input | Multiple ordered configurations |
+| **Use for** | SQS generation, fractional substitution | Supercell enumeration, DFT screening |
 
 ---
 
@@ -1722,6 +1347,425 @@ substitution_generator(substitutions={'Ni': {'replace_with': 'Mn', 'fraction': 0
 # ✅ CORRECT: This creates fractional occupancy on ALL Ni sites
 disorder_generator(site_substitutions={'Ni': {'Ni': 0.8, 'Mn': 0.2}})
 # Output: 1 structure where every Ni site has 80% Ni + 20% Mn occupancy
+
+---
+
+## Appendix: Detailed Tool Catalogue
+
+This appendix provides complete specifications for all candidate generation tools, including detailed parameter lists, return formats, use cases, and examples. Refer to the [Quick Tool Reference](#quick-tool-reference) section for a concise overview organized by workflow phase.
+
+### Phase 0 Tools: Composition Discovery
+
+### 0A. `composition_enumerator` — Oxidation-Balanced Enumeration
+Generates all charge-balanced compositions from element lists and oxidation state constraints.
+Use when you know which elements to explore but not which compositions exist.
+
+**Key parameters:**
+- `elements`: list of element symbols, e.g. `['Li', 'Mn', 'P', 'O']`
+- `oxidation_states`: dict mapping elements to allowed oxidation states, e.g. `{'Li': [1], 'Mn': [2, 3], 'P': [5], 'O': [-2]}`
+- `max_formula_units`: cap on formula unit count (default 6, increase for complex compositions)
+- `max_atoms_per_formula`: hard limit on total atoms (default 30, prevents combinatorial explosion)
+- `anion_cation_ratio_max`: maximum anion:cation ratio (default 4.0, excludes Li₁Mn₁₀P₁₀O₅₀-type nonsense)
+- `min_cation_fraction`: minimum cation fraction (default 0.05, excludes Li₀.₀₁O₀.₉₉-type nonsense)
+- `require_all_elements`: if True, only returns compositions containing ALL specified elements (default True)
+- `allow_mixed_valence`: if True, allows mixed oxidation states (e.g., Mn²⁺/Mn³⁺ in mixed-valence manganates) (default True)
+- `sort_by`: `'atoms'` (fewest atoms first), `'anion_ratio'` (lowest O/cation ratio), `'alphabetical'`
+- `output_format`: `'minimal'` (formula strings) or `'detailed'` (full metadata)
+
+**Returns:**
+```python
+{
+  "success": True,
+  "count": 12,
+  "compositions": [
+    "Li3PO4",
+    "LiMnPO4",  # Target composition! (olivine battery cathode)
+    "LiFePO4",  # If Fe added to oxidation_states
+    ...
+  ],
+  # OR with output_format='detailed':
+  "compositions": [
+    {
+      "formula": "LiMnPO4",
+      "reduced_formula": "LiMnPO4",
+      "num_atoms": 7,
+      "cation_count": 3,
+      "anion_count": 4,
+      "anion_cation_ratio": 1.33,
+      "oxidation_states": {"Li": 1, "Mn": 2, "P": 5, "O": -2},
+      "charge": 0
+    },
+    ...
+  ]
+}
+```
+
+**Chemical filters explained:**
+- `max_atoms_per_formula=30`: Prevents unrealistically large formulas (e.g., Li₁₀Mn₁₀P₁₀O₄₀ with 70 atoms)
+- `anion_cation_ratio_max=4.0`: Prevents anion-heavy compositions (e.g., LiMn₁₀P₁₀O₅₀ with ratio ≈ 2.4)
+- `min_cation_fraction=0.05`: Prevents trace cation compositions (e.g., Li₀.₀₁Mn₀.₉₉O unphysical)
+
+**When to adjust defaults:**
+- Increase `max_formula_units` for complex phases (spinels, Ruddlesden-Popper)
+- Decrease `anion_cation_ratio_max` for metal-rich compounds
+- Set `require_all_elements=False` to include binaries (e.g., Li₂O, Mn₃O₄) alongside ternaries/quaternaries
+
+**Workflow:**
+1. Call `composition_enumerator` with target elements
+2. Filter results by `stability_analyzer` (eliminate compositions far above convex hull)
+3. For each stable composition, proceed to Phase 1 (prototype_builder) or query MP for existing structures
+
+---
+
+### 0B. `pymatgen_substitution_predictor` — ICSD-Based Substitution
+Predicts likely element substitutions using data mining from 100k+ ICSD structures.
+Use when you have a known composition and want to find chemically reasonable analogues.
+
+**Key parameters:**
+- `composition`: starting composition, e.g. `'LiFePO4'`
+- `to_this_composition`: if False (default), finds what this composition can become; if True, finds what can transform INTO this composition
+- `threshold`: probability cutoff (0.001 = permissive, 0.1 = strict)
+- `max_suggestions`: limit number of suggestions (default None = unlimited)
+- `group_by_probability`: if True, returns {high: [...], medium: [...], low: [...]}
+
+**Returns:**
+```python
+{
+  "success": True,
+  "original_composition": "LiFePO4",
+  "direction": "from_this_composition",
+  "suggestions": {
+    "high": [{"formula": "LiMnPO4", "probability": 0.85}, ...],
+    "medium": [{"formula": "LiCoPO4", "probability": 0.45}, ...],
+    "low": [{"formula": "LiNiPO4", "probability": 0.02}, ...]
+  }
+}
+```
+
+**Use case: Template-based discovery**
+```python
+# Find what LiFePO₄ can transform into
+result = pymatgen_substitution_predictor('LiFePO4', threshold=0.01)
+
+# Extract high-confidence suggestions
+target_formulas = [s['formula'] for s in result['suggestions']['high']]
+
+# For each, check MP for structures
+for formula in target_formulas:
+    mp_result = mp_search_materials(formula=formula)
+    if mp_result['count'] > 0:
+        # Structure exists in MP, can use directly
+```
+
+**Limitation:** ICSD substitution patterns are conservative (based on existing materials).
+For truly novel compositions (e.g., where no close analogues exist in the database),
+use `composition_enumerator` instead.
+
+---
+
+### 0C. `mp_search_materials` — Template Structure Search
+Queries Materials Project for structures matching composition/chemistry constraints.
+Use to find structural templates for target element systems.
+
+**Key parameters for template search:**
+- `elements`: list of elements, e.g. `['Li', 'Fe', 'P', 'O']` (finds all Li-Fe-P-O compounds)
+- `num_elements`: constrain to binary (2), ternary (3), quaternary (4), etc.
+- `crystal_system`: `'cubic'`, `'tetragonal'`, `'orthorhombic'`, etc. (omit for all)
+- `spacegroup_number`: specific space group (e.g., 225 for fluorite)
+- `is_stable`: True (only thermodynamically stable), False (include metastable)
+- `limit`: max results (default 100)
+
+**Template discovery workflow:**
+```python
+# Step 1: Find analogues with similar chemistry (Fe instead of Mn)
+li_fe_p_o = mp_search_materials(
+    elements=['Li', 'Fe', 'P', 'O'],
+    num_elements=4,
+    is_stable=True,
+    limit=50
+)
+
+# Step 2: Extract stoichiometric patterns
+patterns = set()
+for mat in li_fe_p_o['materials']:
+    # Identify pattern: LiMPO₄, Li₃M₂(PO₄)₃, etc.
+    patterns.add(mat['composition_reduced'])
+
+# Step 3: Use patterns to constrain composition_enumerator
+if 'NaMnPO4' in patterns:
+    # Found olivine pattern (AMPO₄)! Prioritize compositions around 7 atoms
+    result = composition_enumerator(
+        elements=['Li', 'Mn', 'P', 'O'],
+        oxidation_states={'Li': [1], 'Mn': [2], 'P': [5], 'O': [-2]},
+        max_formula_units=8  # Allows LiMnPO₄ (7 atoms)
+    )
+```
+
+**When no direct templates exist:**
+If `mp_search_materials(['Li', 'Mn', 'P', 'O'])` returns 0 results, try:
+1. Substitute one element: `['Na', 'Mn', 'P', 'O']` or `['Li', 'Fe', 'P', 'O']`
+2. Search broader family: `['alkali', 'TM', 'P', 'O']` where TM = transition metal
+3. Fall back to `composition_enumerator` (exhaustive enumeration)
+
+---
+
+### Phase 1-5 Tools: Structure Generation
+
+### 1. `pymatgen_prototype_builder` — Seed Structure
+Builds an ideal crystal from a spacegroup number/symbol, species list, and lattice parameters.
+This is the **entry point** for any workflow that starts from scratch rather than an existing structure.
+
+**Key parameters:**
+- `spacegroup`: int (1–230) or Hermann-Mauguin symbol, e.g. `225` or `"Fm-3m"`
+- `species`: list of element symbols (`['La', 'Mn', 'O', 'O', 'O']`) or Wyckoff dict
+- `lattice_parameters`: `[a, b, c, alpha, beta, gamma]` in Å and degrees; `[a]` works for cubic
+- `wyckoff_positions`: optional dict mapping Wyckoff labels to species/coords
+- `output_format`: `'dict'` (default, pass to other tools), `'poscar'`, `'cif'`, `'ase'`
+
+**Returns:** `structures[i].structure` — pass directly to substitution, enumeration, or defect tools.
+
+**`wyckoff_positions` proximity gotcha:** Passing a Wyckoff dict (e.g. `{'1a': 'Ba', '1b': 'Ti', '3c': 'O'}`) can raise
+"sites less than 0.01 Å apart" for multi-species prototypes where pymatgen auto-generates
+overlapping fractional coords. **Preferred approach:** supply explicit `species` and `coords` lists
+instead, and use `validate_proximity=False` when debugging a new prototype before finalising
+lattice parameters.
+
+---
+
+### 2. `pymatgen_substitution_generator` — Ordered Enumeration of Site Replacements
+Replaces elements in existing structures by FULLY replacing specific sites, generating ORDERED
+structures with integer occupancy. Best for isostructural analogue screening across a fixed
+lattice topology.
+
+**CRITICAL: This tool creates ORDERED structures, NOT fractional occupancy.**
+- `fraction=0.15` means "fully replace 15% of sites" (1 site out of 6 → integer occupancy)
+- Output: Multiple ordered variants where specific sites are 100% replaced
+- Example: `{'Ni': {'replace_with': 'Mn', 'fraction': 0.2}}` with 5 Ni sites generates
+  5 structures, each with 1 different Ni site fully replaced by Mn
+- For fractional occupancy (80% Ni + 20% Mn on same site), use `pymatgen_disorder_generator`
+
+**Key parameters:**
+- `substitutions`: `{'Li': 'Na'}` (full swap), `{'Li': ['Na', 'K']}` (one variant per replacement),
+  `{'Li': {'replace_with': 'Na', 'fraction': 0.5}}` (FULLY replace 50% of Li sites, not partial occupancy)
+- `n_structures`: variants to generate **per substitution combination** (default 5).
+  For deterministic full swaps (`fraction=1.0`) set this to **1** — higher values only
+  produce identical duplicates. For partial site replacement (`fraction < 1.0`), generates
+  different random orderings. Total output = `n_structures × num_combinations`, capped by `max_attempts`.
+- `max_attempts`: **hard cap on total output count** (default 50). If you supply N
+  substitution options with n_structures=k, set `max_attempts ≥ N × k` or outputs
+  will be silently truncated. Example: 8 B-site metals with n_structures=1 needs
+  `max_attempts=8` (or higher); with n_structures=3 needs `max_attempts=24`.
+- `enforce_charge_neutrality`: set `True` for ionic materials
+- `site_selector`: `'all'`, `'wyckoff_4a'`, `'coordination_6'`, etc.
+- `preserve_disorder`: preserves existing disorder in inputs (does NOT create fractional occupancy)
+
+**When to use over `ion_exchange_generator`:** when you want exploratory doping without
+strict stoichiometry adjustment and charge neutrality is handled manually or checked post-hoc.
+
+**When to use over `disorder_generator`:** when you need ordered enumerated configurations
+for exhaustive DFT calculations or supercell enumeration, NOT for creating statistical disorder.
+
+---
+
+### 3. `pymatgen_ion_exchange_generator` — Charge-Neutral Substitution
+Replaces a mobile ion (e.g. Li⁺) with one or more ions, **automatically adjusting stoichiometry**
+so that total ionic charge is conserved. Only charge-neutral structures are returned by default.
+
+**Key parameters:**
+- `replace_ion`: element to replace, e.g. `'Li'`
+- `with_ions`: `['Na', 'K']` (equal weight) or `{'Na': 0.6, 'Mg': 0.4}` (weighted split)
+- `exchange_fraction`: fraction of sites to exchange (0–1), default `1.0`
+- `allow_oxidation_state_change`: `False` (default) = only neutral structures returned
+- `max_structures`: cap on returned structures per input (default 10)
+
+**Prototypical use cases:** Li → Na/K battery cathode analogues, Ca²⁺ → La³⁺ doping in oxides.
+
+---
+
+### 3A. `pymatgen_disorder_generator` — Add Configurational Disorder (Order → Disorder)
+***** REQUIRED TOOL FOR FRACTIONAL SITE OCCUPANCY *****
+
+Converts **fully ordered structures** into disordered structures with FRACTIONAL site occupancies.
+This is the ONLY tool for creating partial substitution materials like Li[Ni₀.₈Mn₀.₂]O₂ where
+ALL sites of an element have mixed occupancy (e.g., every Ni site becomes 80% Ni + 20% Mn).
+
+**CRITICAL: This tool creates FRACTIONAL OCCUPANCY, not ordered enumeration.**
+- Creates structures where sites have partial occupancy (e.g., 80% Ni + 20% Mn on same site)
+- Output: Single disordered structure per input with fractional composition
+- Example: `{'Ni': {'Ni': 0.8, 'Mn': 0.2}}` creates Li₃[Ni₂.₄Mn₀.₆]O₆ (statistical disorder)
+- For ordered enumerated configurations, use `pymatgen_substitution_generator` instead
+
+This is the inverse of enumeration: creates the disordered input structures needed for SQS
+generation or systematic enumeration.
+
+**Key parameters:**
+- `site_substitutions`: dict mapping elements to their disordered (fractional) occupancies
+  - Format: `{element: {species1: fraction1, species2: fraction2, ...}}`
+  - Binary mixing: `{'Ni': {'Ni': 0.8, 'Mn': 0.2}}` — Li[Ni₀.₈Mn₀.₂]O₂
+  - Ternary mixing: `{'Co': {'Ni': 0.333, 'Mn': 0.333, 'Co': 0.334}}` — NMC
+  - Fractions must sum to 1.0 (±`composition_tolerance`)
+- `site_selector`: strategy for which sites receive disorder (default: `'all_equivalent'`)
+  - `'all_equivalent'`: apply to all symmetry-equivalent sites (recommended)
+  - `'wyckoff_4a'`: specific Wyckoff position
+  - `'first_site'`: only first occurrence (breaks symmetry, use with caution)
+- `validate_charge_neutrality`: `True` (default) — warns if disorder creates charge imbalance
+- `composition_tolerance`: tolerance for fraction sums (default 0.01 = 1%)
+
+**Typical workflow:**
+```python
+# Step 1: Get ordered structure from Materials Project
+mp_result = mp_get_material_properties(
+    material_ids=["mp-1097088"],  # LiNiO₂
+    properties=["structure"]
+)
+
+# Step 2: Add disorder for partial substitution Li[Ni₀.₈Mn₀.₂]O₂
+disordered = pymatgen_disorder_generator(
+    input_structures=mp_result["properties"][0]["structure"],
+    site_substitutions={"Ni": {"Ni": 0.8, "Mn": 0.2}}  # 80% Ni, 20% Mn on TM sites
+)
+
+# Step 3: Generate SQS for DFT calculations
+sqs = pymatgen_sqs_generator(
+    input_structures=disordered["structures"],
+    supercell_size=16,
+    n_structures=3
+)
+```
+
+**Use cases:**
+- Battery cathodes: Li[Ni₀.₈Mn₀.₂]O₂, Li[Ni₀.₆Mn₀.₂Co₀.₂]O₂ (NMC622), (Li,Na)CoO₂
+- Perovskite oxides: La[Mn₀.₇Fe₀.₃]O₃, (Ca,Sr)TiO₃
+- High-entropy materials: (Mg,Co,Ni,Cu,Zn)O with equimolar mixing
+- Doped semiconductors: Si_{1-x}Ge_x, Al_xGa_{1-x}N
+- Mixed anion systems: Li₂O_{1-x}F_x
+
+**When to use:** When you have an ordered parent structure (from MP or prototype) and need
+to model a specific composition with fractional occupancies. Output is deterministic (one
+disordered structure per input) and ready for SQS or enumeration.
+
+---
+
+### 3B. Tool Selection: `disorder_generator` vs `substitution_generator`
+
+**The Critical Distinction:**
+
+| Aspect | `pymatgen_disorder_generator` | `pymatgen_substitution_generator` |
+|--------|-------------------------------|-----------------------------------|
+| **Output type** | Fractional occupancy (statistical disorder) | Integer occupancy (ordered enumeration) |
+| **Site occupancy** | Multiple species on same site with fractions summing to 1 | Single species per site (occu=1) |
+| **Example** | Site has 80% Ni + 20% Mn | Site 1 has 100% Mn, Sites 2-5 have 100% Ni |
+| **Formula** | Li₃[Ni₂.₄Mn₀.₆]O₆ (fractional) | LiNi₄MnO₁₀ (integer, ordered) |
+| **Output count** | 1 disordered structure per input | Multiple ordered configurations per input |
+| **Use for** | SQS generation, VCA calculations, statistical models | Supercell enumeration, exhaustive DFT, specific orderings |
+
+**Decision Tree:**
+
+```
+Do you need partial substitution like Li[Ni₀.₈Mn₀.₂]O₂?
+├─ YES: Do you want fractional occupancy (every site has 80%Ni+20%Mn)?
+│  ├─ YES → Use `pymatgen_disorder_generator`
+│  │         site_substitutions={'Ni': {'Ni': 0.8, 'Mn': 0.2}}
+│  │         → Output: 1 structure with fractional occupancy
+│  │         → Then: pymatgen_sqs_generator for quasirandom supercells
+│  │
+│  └─ NO: Want ordered enumeration (1 specific Ni replaced per structure)?
+│     └─ YES → Use `pymatgen_substitution_generator`
+│               substitutions={'Ni': {'replace_with': 'Mn', 'fraction': 0.2}}
+│               → Output: 5 structures, each with different Ni site replaced
+│               → Then: Run DFT on each ordered configuration
+│
+└─ NO: Complete substitution (all Li → Na)?
+   └─ Use `pymatgen_substitution_generator`
+      substitutions={'Li': 'Na'}
+      → Output: 1 structure with all Li replaced by Na
+```
+
+**Common Pitfalls:**
+- ❌ Using `substitution_generator` with `fraction=0.15` expecting fractional occupancy
+  - Result: Ordered structure with 1 site fully replaced, not statistical disorder
+- ❌ Using `disorder_generator` when you want to explore specific orderings
+  - Result: Single averaged structure, cannot enumerate configurational space
+- ❌ Setting `preserve_disorder=True` in `substitution_generator` expecting it to create disorder
+  - Result: Only preserves existing disorder, does not create new fractional occupancy
+
+**Research examples:**
+- Li[Ni₀.₈Mn₀.₂]O₂ battery cathode → `disorder_generator` → `sqs_generator`
+- La[Mn₁₋ₓFeₓ]O₃ perovskite (x=0.1-0.5) → `disorder_generator`
+- Screening A-site metals in ABO₃ perovskites → `substitution_generator` with `['Ca','Sr','Ba']`
+
+---
+
+### 4. `pymatgen_enumeration_generator` — Exhaustive Ordering of Disordered Structures
+Takes structures with **fractional site occupancies** and returns all symmetry-inequivalent
+ordered supercell approximants, ranked by Ewald energy or cell size.
+
+**Key parameters:**
+- `supercell_size`: supercell multiplier (1–4, default 2); creates a supercell of size
+  `[supercell_size, supercell_size, 1]` to accommodate fractional occupancies. Keep ≤ 2
+  for ternaries to avoid combinatorial explosion
+- `n_structures`: max ordered structures returned per input (default 20, max 500)
+- `sort_by`: `'ewald'` (default, lowest energy first), `'num_sites'`, `'random'`
+- `add_oxidation_states`: auto-assign oxidation states for Ewald ranking (default `True`)
+- `refine_structure`: re-symmetrize before enumeration (recommended, default `True`)
+
+
+**When to use over `sqs_generator`:** when you need the complete ordered-configuration pool,
+want to identify the ground-state ordering, or are building a cluster expansion training set.
+
+---
+
+### 5. `pymatgen_sqs_generator` — Special Quasirandom Structures
+Finds a small ordered supercell whose Warren-Cowley pair correlations best mimic a
+perfectly random alloy. Returns the **single best quasirandom approximant** per input,
+not the full ordered-configuration space.
+
+**Key parameters:**
+- `supercell_size`: target formula units in SQS cell (default 8; use 8–16 for binary, 12–24 for ternary)
+- `supercell_matrix`: explicit `[nx, ny, nz]` or 3×3 matrix (overrides `supercell_size`)
+- `n_structures`: independent SQS candidates per input (default 3); ranked by `sqs_error`
+- `n_mc_steps`: Monte Carlo steps per candidate (default 50 000; increase for multicomponent)
+- `n_shells`: correlation shells in objective function (default 4)
+- `seed`: set for reproducibility
+- `use_mcsqs`: use ATAT `mcsqs` binary if available (better quality for large systems)
+
+**When to use over `enumeration_generator`:** target system is a solid solution / high-entropy
+material where disorder is the physical state being modelled, not a defect to be minimised.
+
+---
+
+### 6. `pymatgen_defect_generator` — Point Defect Supercells
+Takes a **perfect bulk host structure** and generates one supercell per symmetry-inequivalent
+defect site. Supports vacancies, substitutional dopants, and interstitials.
+
+**Key parameters:**
+- `vacancy_species`: `['Li', 'O']` — generate V_Li, V_O defects
+- `substitution_species`: `{'Fe': ['Mn', 'Co']}` — Mn_Fe and Co_Fe substitutionals
+- `interstitial_species`: `['Li']` — find void sites and insert Li
+- `charge_states`: `{'V_Li': [-1, 0, 1]}` — metadata only; structures are always neutral geometry
+- `supercell_min_atoms`: target atoms in defect supercell (default 64; 64–128 for plane-wave DFT)
+- `inequivalent_only`: `True` (default) — generate only symmetry-distinct defects
+
+**Downstream:** feed outputs to `pymatgen_perturbation_generator` to rattle defect geometries,
+or save directly to the ASE database via `ase_store_result`.
+
+---
+
+### 7. `pymatgen_perturbation_generator` — Structural Ensemble / Augmentation
+Applies random atomic displacements ("rattling") and/or lattice strain to create ensembles
+of perturbed structures. Does **not** change composition.
+
+**Key parameters:**
+- `displacement_max`: max displacement per atom in Å (default 0.1; typical range 0.05–0.2)
+- `strain_percent`: `None` (off), scalar (uniform), `[min, max]` (random range), or
+  6-element Voigt tensor `[e_xx, e_yy, e_zz, e_xy, e_xz, e_yz]`
+- `n_structures`: perturbed copies per input (default 10, max 200)
+- `seed`: for reproducibility
+
+**Primary uses:**
+- Provide DFT starting geometries that are not stuck at a symmetry saddle point
+- Augment ML training datasets with off-equilibrium configurations
+- Generate strained cells for elastic property screening
 ```
 For partial substitution materials like Li[Ni₀.₈Mn₀.₂]O₂, always use `disorder_generator`.
 

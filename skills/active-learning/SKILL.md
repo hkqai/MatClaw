@@ -118,361 +118,30 @@ Run both simultaneously:
 
 ---
 
-## Tool Catalogue
+## Quick Tool Reference
 
 ### ARROWS Tools (Thermodynamically-Guided Synthesis)
 
-#### Campaign Preparation Tools
-
-##### `arrows_initialize_campaign` — Initialize Active Learning Campaign
-Sets up ARROWS campaign directory with thermodynamic data and ranked precursor sets.
-
-**Key parameters:**
-- `target`: Target material formula (e.g., `'Ba2YCu3O7'`, `'LiCoO2'`)
-- `precursors`: Available precursor chemicals (e.g., `['Y2O3', 'BaO', 'CuO', 'BaCO3']`)
-- `temperatures`: Synthesis temperatures to explore (°C, e.g., `[600, 700, 800, 900]`)
-- `campaign_dir`: Working directory for campaign state files
-- `allow_oxidation`: Whether O₂ can participate as reactant (default `True`)
-- `open_system`: Whether gases can escape (default `True`)
-
-**Returns:**
-```python
-{
-  "success": True,
-  "campaign_dir": "./campaigns/Ba2YCu3O7_run1",
-  "target": "Ba2YCu3O7",
-  "num_precursor_sets": 24,
-  "num_experiments": 96,  # Sets × temperatures
-  "files_created": ["Settings.json", "Rxn_TD.csv"]
-}
-```
-
-**What it does:**
-- Queries Materials Project for thermodynamic data
-- Enumerates all balanced precursor combinations
-- Calculates ΔG for each reaction at each temperature
-- Ranks sets by thermodynamic driving force
-- Saves campaign state to disk
-
----
-
-#### Experiment Loop Tools
-
-##### `arrows_suggest_experiment` — Get Next Experiment
-Suggests the next experiment(s) based on thermodynamic favorability and learned pairwise reactions.
-
-**Key parameters:**
-- `campaign_dir`: Path to campaign initialized by `arrows_initialize_campaign`
-- `batch_size`: Number of parallel experiments to suggest (1-50, default 1)
-- `explore`: If `True`, prioritize information gain over thermodynamics (default `False`)
-- `enforce_thermo`: If `True`, only use thermodynamically favorable pairwise reactions (default `False`)
-
-**Returns:**
-```python
-{
-  "success": True,
-  "campaign_complete": False,
-  "suggestions": [
-    {
-      "experiment_id": 1,
-      "precursors": ["BaO", "Y2O3", "CuO"],
-      "temperature_C": 700,
-      "rationale": "Highest ΔG (most favorable), no prior data"
-    }
-  ],
-  "experiments_remaining": 95
-}
-```
-
-**Decision logic:**
-- Ranks precursor sets by thermodynamic favorability
-- Re-ranks using learned pairwise reaction knowledge (if available)
-- Suggests untested (precursors, temperature) combinations
-- Returns `campaign_complete=True` when search space exhausted
-
----
-
-##### `xrd_analyze_pattern` — Automated Phase Identification
-Analyzes experimental XRD pattern using CNN-based phase identification with automated Rietveld refinement.
-
-**Key parameters:**
-- `spectrum_path`: Path to .xy XRD pattern file
-- `model_path`: Path to trained model (e.g., `'Models/'` or `'Model.h5'`)
-- `min_confidence`: Confidence threshold for phase reporting (0-100%, default 40)
-- `calculate_weights`: Whether to perform Rietveld refinement (default `True`)
-- `wavelength`: X-ray wavelength in Å (default 1.5406 for Cu Kα)
-
-**Returns:**
-```python
-{
-  "success": True,
-  "spectrum_file": "exp_001.xy",
-  "num_phases": 2,
-  "phases": ["BaTiO3_99", "BaO_225"],  # formula_spacegroup format
-  "confidence": [85.3, 42.1],
-  "weight_fractions": [0.92, 0.08],
-  "arrows_ready": True,  # Can pass directly to arrows_record_result
-  "unknown_peaks": {"present": False}
-}
-```
-
-**CRITICAL:** Output format is designed for direct compatibility with `arrows_record_result`:
-- `phases` → `products` parameter
-- `weight_fractions` → `weight_fractions` parameter
-
----
-
-##### `arrows_record_result` — Record Experimental Outcome
-Updates campaign with experimental result, extracting pairwise reaction knowledge.
-
-**Key parameters:**
-- `campaign_dir`: Campaign directory
-- `precursors`: Precursors used (must match suggestion)
-- `temperature_C`: Synthesis temperature
-- `products`: Observed phases in `formula_spacegroup` format (from XRD)
-- `weight_fractions`: Weight fractions of products (from Rietveld)
-
-**Returns:**
-```python
-{
-  "success": True,
-  "experiment_recorded": 1,
-  "pairwise_reactions_learned": 3,
-  "files_updated": ["Exp.json", "PairwiseRxns.csv"]
-}
-```
-
-**What it does:**
-- Stores experimental result in `Exp.json`
-- Uses pairwise retroanalysis to infer reaction knowledge
-- Updates `PairwiseRxns.csv` with learned reactions
-- Enables subsequent suggestions to leverage new knowledge
-
----
-
-#### Results Analysis Tools
-
-Tools for analyzing campaign outcomes and visualizing learned knowledge.
-
-*(To be added: trajectory analysis, success metrics, knowledge visualization)*
-
----
+| Phase | Tool | Purpose | Key Features |
+|-------|------|---------|--------------|
+| **Setup** | `arrows_initialize_campaign` | Initialize synthesis campaign | Enumerates balanced reactions, ranks by ΔG, queries MP |
+| **Loop** | `arrows_suggest_experiment` | Get next experiment(s) | Thermodynamic ranking + learned pairwise reactions |
+| **Loop** | `xrd_analyze_pattern` | Automated phase ID | CNN-based phase identification + Rietveld refinement |
+| **Loop** | `arrows_record_result` | Record experimental outcome | Extracts pairwise reaction knowledge, updates campaign |
 
 ### Bayesian Optimization Tools (Generic Process Optimization)
 
-#### Campaign Setup Tools
+| Phase | Tool | Purpose | Key Features |
+|-------|------|---------|--------------|
+| **Setup** | `bo_initialize_campaign` | Initialize BO campaign | Defines parameter space (continuous/discrete/categorical) + objectives |
+| **Loop** | `bo_suggest_experiment` | Get next experiment(s) | GP surrogate model + acquisition function (EI/UCB/PI) |
+| **Loop** | `bo_record_observation` | Record experimental result | Updates GP model, tracks best observed value |
 
-##### `bo_initialize_campaign` — Initialize Bayesian Optimization Campaign
-Sets up BO campaign directory with parameter space definition and optimization objectives.
+**Key Distinctions:**
+- **ARROWS**: Domain-specific, thermodynamically-guided, learns transferable chemistry knowledge
+- **Bayesian Optimization**: Domain-agnostic, model-free learning, works with any parameter/objective
 
-**Key parameters:**
-- `campaign_dir`: Working directory for campaign state files
-- `parameter_space`: List of parameter definitions (continuous, discrete, categorical)
-- `objective_config`: Optimization objective (single or multi-objective)
-- `n_initial_random`: Number of random samples before GP modeling (default 5)
-- `campaign_name`: Optional descriptive name
-- `metadata`: Optional experiment metadata
-
-**Parameter space format:**
-```python
-parameter_space = [
-    {
-        "name": "temperature",
-        "type": "continuous",
-        "bounds": [400, 1200],
-        "unit": "C"
-    },
-    {
-        "name": "pressure",
-        "type": "continuous",
-        "bounds": [0.1, 10],
-        "unit": "atm",
-        "log_scale": True  # Optional: search in log space
-    },
-    {
-        "name": "precursor",
-        "type": "categorical",
-        "choices": ["Li2CO3", "LiOH", "Li2O"]
-    },
-    {
-        "name": "stirring_speed",
-        "type": "discrete",
-        "values": [100, 200, 500, 1000],
-        "unit": "rpm"
-    }
-]
-```
-
-**Objective configuration:**
-```python
-# Single objective (maximize or minimize)
-objective_config = {
-    "type": "single_objective",
-    "metrics": ["phase_purity"],  # or ["yield"], ["conductivity"], etc.
-    "direction": "maximize"  # or "minimize"
-}
-
-# Multi-objective (future support)
-objective_config = {
-    "type": "multi_objective",
-    "metrics": ["purity", "cost"],
-    "directions": ["maximize", "minimize"],
-    "scalarization": "weighted_sum",
-    "weights": [0.7, 0.3]
-}
-```
-
-**Returns:**
-```python
-{
-  "success": True,
-  "campaign_dir": "./bo_campaigns/process_opt_001",
-  "campaign_name": "Thin film deposition optimization",
-  "n_parameters": 4,
-  "n_initial_random": 5,
-  "initial_suggestions": [
-    {"temperature": 750, "pressure": 2.3, "precursor": "LiOH", "stirring_speed": 500},
-    # ... 4 more random suggestions
-  ],
-  "state_file": "./bo_campaigns/process_opt_001/bo_state.json",
-  "observations_file": "./bo_campaigns/process_opt_001/bo_observations.json"
-}
-```
-
-**What it does:**
-- Validates parameter space and objective configuration
-- Initializes campaign state (status: "initial_sampling")
-- Generates initial random suggestions for exploration
-- Creates campaign directory and state files
-
----
-
-#### Experiment Loop Tools
-
-##### `bo_record_observation` — Record Experimental Observation
-Updates campaign with experimental result and associated measurements.
-
-**Key parameters:**
-- `campaign_dir`: Campaign directory
-- `parameters`: Dictionary of parameter values used (must match parameter space)
-- `observations`: Dictionary of measured metrics
-- `observation_id`: Optional unique identifier
-- `metadata`: Optional experiment metadata (timestamp, operator, notes, file paths, etc.)
-
-**Example:**
-```python
-bo_record_observation(
-    campaign_dir="./bo_campaigns/process_opt_001",
-    parameters={
-        "temperature": 800.0,
-        "pressure": 1.0,
-        "precursor": "Li2CO3",
-        "stirring_speed": 500
-    },
-    observations={
-        "phase_purity": 0.85,
-        "grain_size_nm": 45.2,
-        "synthesis_time_min": 120
-    },
-    observation_id="exp_023",
-    metadata={
-        "xrd_file": "/data/xrd/exp_023.xy",
-        "operator": "robot_arm_1",
-        "timestamp": "2026-04-13T14:23:00"
-    }
-)
-```
-
-**Returns:**
-```python
-{
-  "success": True,
-  "observation_id": "exp_023",
-  "n_observations": 8,
-  "objective_value": 0.85,
-  "initial_phase": True,  # Still in random sampling phase
-  "initial_phase_complete": False,
-  "best_observed_value": 0.92,
-  "files_updated": ["bo_state.json", "bo_observations.json"]
-}
-```
-
-**What it does:**
-- Validates parameters against campaign parameter space
-- Validates that required objective metrics are present
-- Appends observation to campaign database
-- Updates campaign state (observation count, best value, status)
-- Transitions from "initial_sampling" to "optimizing" after n_initial_random observations
-
----
-
-##### `bo_suggest_experiment` — Generate Next Experiment Suggestions
-Suggests next experiment(s) using Gaussian Process surrogate model and acquisition function.
-
-**Key parameters:**
-- `campaign_dir`: Campaign directory
-- `batch_size`: Number of experiments to suggest (default 1)
-- `acquisition_function`: Strategy for selecting next experiments
-  - `"ei"` (Expected Improvement) — Balance exploration/exploitation (default)
-  - `"ucb"` (Upper Confidence Bound) — Configurable exploration
-  - `"pi"` (Probability of Improvement) — Conservative optimization
-  - `"random"` — Pure exploration (ignore model)
-- `exploration_weight`: Control exploration vs exploitation
-  - For EI/PI: xi parameter (default 0.01, larger = more exploration)
-  - For UCB: beta parameter (default 2.0, larger = more exploration)
-- `n_candidates`: Number of candidate points to evaluate (default 10000)
-- `random_seed`: Random seed for reproducibility
-
-**Returns during initial phase (random sampling):**
-```python
-{
-  "success": True,
-  "using_gp_model": False,
-  "n_suggestions": 1,
-  "suggestions": [
-    {"temperature": 650, "pressure": 5.2, "precursor": "Li2O", "stirring_speed": 200}
-  ],
-  "n_observations": 3,
-  "initial_phase": True,
-  "acquisition_function": "random",
-  "rationale": "Initial random exploration (3/5 complete)"
-}
-```
-
-**Returns during optimization phase (GP-guided):**
-```python
-{
-  "success": True,
-  "using_gp_model": True,
-  "n_suggestions": 2,
-  "suggestions": [
-    {"temperature": 815, "pressure": 1.2, "precursor": "LiOH", "stirring_speed": 500},
-    {"temperature": 780, "pressure": 0.8, "precursor": "Li2CO3", "stirring_speed": 1000}
-  ],
-  "n_observations": 12,
-  "best_observed_value": 0.94,
-  "best_parameters": {"temperature": 800, "pressure": 1.0, ...},
-  "gp_model_score": 0.87,  # R² score of GP fit
-  "acquisition_function": "ei",
-  "exploration_weight": 0.01,
-  "warnings": []
-}
-```
-
-**What it does:**
-- **Initial phase**: Samples random points for exploration (first n_initial_random observations)
-- **Optimization phase**: Builds Gaussian Process surrogate model from observations
-- Evaluates acquisition function across candidate points
-- Selects batch of experiments with highest acquisition values
-- For batch suggestions, uses greedy sequential selection to promote diversity
-
----
-
-#### Results Analysis Tools
-
-Tools for analyzing BO campaign outcomes.
-
-*(To be added: convergence plots, parameter importance, model diagnostics)*
+**Complete specifications:** See [Appendix: Detailed Tool Catalogue](#appendix-detailed-tool-catalogue) for parameters, returns, examples, and use cases.
 
 ---
 
@@ -1766,3 +1435,363 @@ python construct_xrd_model.py \
 
 **Integration philosophy:**
 Both tools developed by Nathan Szymanski - designed to work together for autonomous synthesis optimization.
+
+---
+
+## Appendix: Detailed Tool Catalogue
+
+This appendix provides complete technical specifications for all active learning tools. For a quick overview, see the [Quick Tool Reference](#quick-tool-reference) at the top of this document.
+
+### ARROWS Tools (Thermodynamically-Guided Synthesis)
+
+#### Campaign Preparation Tools
+
+##### `arrows_initialize_campaign` — Initialize Active Learning Campaign
+Sets up ARROWS campaign directory with thermodynamic data and ranked precursor sets.
+
+**Key parameters:**
+- `target`: Target material formula (e.g., `'Ba2YCu3O7'`, `'LiCoO2'`)
+- `precursors`: Available precursor chemicals (e.g., `['Y2O3', 'BaO', 'CuO', 'BaCO3']`)
+- `temperatures`: Synthesis temperatures to explore (°C, e.g., `[600, 700, 800, 900]`)
+- `campaign_dir`: Working directory for campaign state files
+- `allow_oxidation`: Whether O₂ can participate as reactant (default `True`)
+- `open_system`: Whether gases can escape (default `True`)
+
+**Returns:**
+```python
+{
+  "success": True,
+  "campaign_dir": "./campaigns/Ba2YCu3O7_run1",
+  "target": "Ba2YCu3O7",
+  "num_precursor_sets": 24,
+  "num_experiments": 96,  # Sets × temperatures
+  "files_created": ["Settings.json", "Rxn_TD.csv"]
+}
+```
+
+**What it does:**
+- Queries Materials Project for thermodynamic data
+- Enumerates all balanced precursor combinations
+- Calculates ΔG for each reaction at each temperature
+- Ranks sets by thermodynamic driving force
+- Saves campaign state to disk
+
+---
+
+#### Experiment Loop Tools
+
+##### `arrows_suggest_experiment` — Get Next Experiment
+Suggests the next experiment(s) based on thermodynamic favorability and learned pairwise reactions.
+
+**Key parameters:**
+- `campaign_dir`: Path to campaign initialized by `arrows_initialize_campaign`
+- `batch_size`: Number of parallel experiments to suggest (1-50, default 1)
+- `explore`: If `True`, prioritize information gain over thermodynamics (default `False`)
+- `enforce_thermo`: If `True`, only use thermodynamically favorable pairwise reactions (default `False`)
+
+**Returns:**
+```python
+{
+  "success": True,
+  "campaign_complete": False,
+  "suggestions": [
+    {
+      "experiment_id": 1,
+      "precursors": ["BaO", "Y2O3", "CuO"],
+      "temperature_C": 700,
+      "rationale": "Highest ΔG (most favorable), no prior data"
+    }
+  ],
+  "experiments_remaining": 95
+}
+```
+
+**Decision logic:**
+- Ranks precursor sets by thermodynamic favorability
+- Re-ranks using learned pairwise reaction knowledge (if available)
+- Suggests untested (precursors, temperature) combinations
+- Returns `campaign_complete=True` when search space exhausted
+
+---
+
+##### `xrd_analyze_pattern` — Automated Phase Identification
+Analyzes experimental XRD pattern using CNN-based phase identification with automated Rietveld refinement.
+
+**Key parameters:**
+- `spectrum_path`: Path to .xy XRD pattern file
+- `model_path`: Path to trained model (e.g., `'Models/'` or `'Model.h5'`)
+- `min_confidence`: Confidence threshold for phase reporting (0-100%, default 40)
+- `calculate_weights`: Whether to perform Rietveld refinement (default `True`)
+- `wavelength`: X-ray wavelength in Å (default 1.5406 for Cu Kα)
+
+**Returns:**
+```python
+{
+  "success": True,
+  "spectrum_file": "exp_001.xy",
+  "num_phases": 2,
+  "phases": ["BaTiO3_99", "BaO_225"],  # formula_spacegroup format
+  "confidence": [85.3, 42.1],
+  "weight_fractions": [0.92, 0.08],
+  "arrows_ready": True,  # Can pass directly to arrows_record_result
+  "unknown_peaks": {"present": False}
+}
+```
+
+**CRITICAL:** Output format is designed for direct compatibility with `arrows_record_result`:
+- `phases` → `products` parameter
+- `weight_fractions` → `weight_fractions` parameter
+
+---
+
+##### `arrows_record_result` — Record Experimental Outcome
+Updates campaign with experimental result, extracting pairwise reaction knowledge.
+
+**Key parameters:**
+- `campaign_dir`: Campaign directory
+- `precursors`: Precursors used (must match suggestion)
+- `temperature_C`: Synthesis temperature
+- `products`: Observed phases in `formula_spacegroup` format (from XRD)
+- `weight_fractions`: Weight fractions of products (from Rietveld)
+
+**Returns:**
+```python
+{
+  "success": True,
+  "experiment_recorded": 1,
+  "pairwise_reactions_learned": 3,
+  "files_updated": ["Exp.json", "PairwiseRxns.csv"]
+}
+```
+
+**What it does:**
+- Stores experimental result in `Exp.json`
+- Uses pairwise retroanalysis to infer reaction knowledge
+- Updates `PairwiseRxns.csv` with learned reactions
+- Enables subsequent suggestions to leverage new knowledge
+
+---
+
+#### Results Analysis Tools
+
+Tools for analyzing campaign outcomes and visualizing learned knowledge.
+
+*(To be added: trajectory analysis, success metrics, knowledge visualization)*
+
+---
+
+### Bayesian Optimization Tools (Generic Process Optimization)
+
+#### Campaign Setup Tools
+
+##### `bo_initialize_campaign` — Initialize Bayesian Optimization Campaign
+Sets up BO campaign directory with parameter space definition and optimization objectives.
+
+**Key parameters:**
+- `campaign_dir`: Working directory for campaign state files
+- `parameter_space`: List of parameter definitions (continuous, discrete, categorical)
+- `objective_config`: Optimization objective (single or multi-objective)
+- `n_initial_random`: Number of random samples before GP modeling (default 5)
+- `campaign_name`: Optional descriptive name
+- `metadata`: Optional experiment metadata
+
+**Parameter space format:**
+```python
+parameter_space = [
+    {
+        "name": "temperature",
+        "type": "continuous",
+        "bounds": [400, 1200],
+        "unit": "C"
+    },
+    {
+        "name": "pressure",
+        "type": "continuous",
+        "bounds": [0.1, 10],
+        "unit": "atm",
+        "log_scale": True  # Optional: search in log space
+    },
+    {
+        "name": "precursor",
+        "type": "categorical",
+        "choices": ["Li2CO3", "LiOH", "Li2O"]
+    },
+    {
+        "name": "stirring_speed",
+        "type": "discrete",
+        "values": [100, 200, 500, 1000],
+        "unit": "rpm"
+    }
+]
+```
+
+**Objective configuration:**
+```python
+# Single objective (maximize or minimize)
+objective_config = {
+    "type": "single_objective",
+    "metrics": ["phase_purity"],  # or ["yield"], ["conductivity"], etc.
+    "direction": "maximize"  # or "minimize"
+}
+
+# Multi-objective (future support)
+objective_config = {
+    "type": "multi_objective",
+    "metrics": ["purity", "cost"],
+    "directions": ["maximize", "minimize"],
+    "scalarization": "weighted_sum",
+    "weights": [0.7, 0.3]
+}
+```
+
+**Returns:**
+```python
+{
+  "success": True,
+  "campaign_dir": "./bo_campaigns/process_opt_001",
+  "campaign_name": "Thin film deposition optimization",
+  "n_parameters": 4,
+  "n_initial_random": 5,
+  "initial_suggestions": [
+    {"temperature": 750, "pressure": 2.3, "precursor": "LiOH", "stirring_speed": 500},
+    # ... 4 more random suggestions
+  ],
+  "state_file": "./bo_campaigns/process_opt_001/bo_state.json",
+  "observations_file": "./bo_campaigns/process_opt_001/bo_observations.json"
+}
+```
+
+**What it does:**
+- Validates parameter space and objective configuration
+- Initializes campaign state (status: "initial_sampling")
+- Generates initial random suggestions for exploration
+- Creates campaign directory and state files
+
+---
+
+#### Experiment Loop Tools
+
+##### `bo_record_observation` — Record Experimental Observation
+Updates campaign with experimental result and associated measurements.
+
+**Key parameters:**
+- `campaign_dir`: Campaign directory
+- `parameters`: Dictionary of parameter values used (must match parameter space)
+- `observations`: Dictionary of measured metrics
+- `observation_id`: Optional unique identifier
+- `metadata`: Optional experiment metadata (timestamp, operator, notes, file paths, etc.)
+
+**Example:**
+```python
+bo_record_observation(
+    campaign_dir="./bo_campaigns/process_opt_001",
+    parameters={
+        "temperature": 800.0,
+        "pressure": 1.0,
+        "precursor": "Li2CO3",
+        "stirring_speed": 500
+    },
+    observations={
+        "phase_purity": 0.85,
+        "grain_size_nm": 45.2,
+        "synthesis_time_min": 120
+    },
+    observation_id="exp_023",
+    metadata={
+        "xrd_file": "/data/xrd/exp_023.xy",
+        "operator": "robot_arm_1",
+        "timestamp": "2026-04-13T14:23:00"
+    }
+)
+```
+
+**Returns:**
+```python
+{
+  "success": True,
+  "observation_id": "exp_023",
+  "n_observations": 8,
+  "objective_value": 0.85,
+  "initial_phase": True,  # Still in random sampling phase
+  "initial_phase_complete": False,
+  "best_observed_value": 0.92,
+  "files_updated": ["bo_state.json", "bo_observations.json"]
+}
+```
+
+**What it does:**
+- Validates parameters against campaign parameter space
+- Validates that required objective metrics are present
+- Appends observation to campaign database
+- Updates campaign state (observation count, best value, status)
+- Transitions from "initial_sampling" to "optimizing" after n_initial_random observations
+
+---
+
+##### `bo_suggest_experiment` — Generate Next Experiment Suggestions
+Suggests next experiment(s) using Gaussian Process surrogate model and acquisition function.
+
+**Key parameters:**
+- `campaign_dir`: Campaign directory
+- `batch_size`: Number of experiments to suggest (default 1)
+- `acquisition_function`: Strategy for selecting next experiments
+  - `"ei"` (Expected Improvement) — Balance exploration/exploitation (default)
+  - `"ucb"` (Upper Confidence Bound) — Configurable exploration
+  - `"pi"` (Probability of Improvement) — Conservative optimization
+  - `"random"` — Pure exploration (ignore model)
+- `exploration_weight`: Control exploration vs exploitation
+  - For EI/PI: xi parameter (default 0.01, larger = more exploration)
+  - For UCB: beta parameter (default 2.0, larger = more exploration)
+- `n_candidates`: Number of candidate points to evaluate (default 10000)
+- `random_seed`: Random seed for reproducibility
+
+**Returns during initial phase (random sampling):**
+```python
+{
+  "success": True,
+  "using_gp_model": False,
+  "n_suggestions": 1,
+  "suggestions": [
+    {"temperature": 650, "pressure": 5.2, "precursor": "Li2O", "stirring_speed": 200}
+  ],
+  "n_observations": 3,
+  "initial_phase": True,
+  "acquisition_function": "random",
+  "rationale": "Initial random exploration (3/5 complete)"
+}
+```
+
+**Returns during optimization phase (GP-guided):**
+```python
+{
+  "success": True,
+  "using_gp_model": True,
+  "n_suggestions": 2,
+  "suggestions": [
+    {"temperature": 815, "pressure": 1.2, "precursor": "LiOH", "stirring_speed": 500},
+    {"temperature": 780, "pressure": 0.8, "precursor": "Li2CO3", "stirring_speed": 1000}
+  ],
+  "n_observations": 12,
+  "best_observed_value": 0.94,
+  "best_parameters": {"temperature": 800, "pressure": 1.0, ...},
+  "gp_model_score": 0.87,  # R² score of GP fit
+  "acquisition_function": "ei",
+  "exploration_weight": 0.01,
+  "warnings": []
+}
+```
+
+**What it does:**
+- **Initial phase**: Samples random points for exploration (first n_initial_random observations)
+- **Optimization phase**: Builds Gaussian Process surrogate model from observations
+- Evaluates acquisition function across candidate points
+- Selects batch of experiments with highest acquisition values
+- For batch suggestions, uses greedy sequential selection to promote diversity
+
+---
+
+#### Results Analysis Tools
+
+Tools for analyzing BO campaign outcomes.
+
+*(To be added: convergence plots, parameter importance, model diagnostics)*
