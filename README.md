@@ -63,7 +63,7 @@ MatClaw follows a layered architecture:
 | **ChemLLM** | Molecule binding and synthesizability prediction using fine-tuned LLMs (`predict_molecule_binding`, `predict_molecule_synthesizability`) |
 | **Selection** | Multi-objective ranking (Pareto, weighted sum, constraint-based) (`multi_objective_ranker`) |
 | **ORCA** | Quantum chemistry output analysis and cube file generation (`orca_analysis_tools`, `orca_cube_tools`) |
-| **Synthesis Planning** | Recipe quantification and template-based route generation (`synthesis_recipe_quantifier`, `template_route_generator`) |
+| **Synthesis Planning** | Recipe quantification and template-based route generation |
 | **ElemwiseRetro** | Synthesis recipe prediction for inorganic solid state synthesis (`er_predict_precursors`, `er_predict_temperature`) |
 | **ARROWS** | Campaign management for synthesis active learning through ARROWS (`arrows_initialize_campaign`, `arrows_suggest_experiment`, `arrows_record_result`) |
 | **Bayesian Optimization** | Campaign management for synthesis active learning through Bayesian Optimization (`bo_initialize_campaign`, `bo_suggest_experiment`, `bo_record_result`) |

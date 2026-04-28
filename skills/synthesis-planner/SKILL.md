@@ -5,16 +5,16 @@ description: Intelligent synthesis route planning for inorganic materials. Use t
 
 # Synthesis Route Planning Skill
 
-This skill orchestrates synthesis route generation using a strict 3-tier prioritization:
+This skill orchestrates synthesis route generation using a 2-tier prioritization:
 1. **FIRST: Literature-validated routes** from Materials Project (high confidence, proven)
 2. **IF NONE FOUND: ML-predicted routes** for solid-state synthesis (medium confidence, data-driven)
-3. **ONLY IF ML FAILS: Template-based heuristic routes** (low confidence, requires validation)
+3. **IF BOTH FAIL: Suggest routes based on your knowledge** of materials chemistry and synthesis techniques
 
 ## CRITICAL RULE: ALWAYS TRY LITERATURE SEARCH FIRST
 
-**You MUST attempt mp_search_recipe before considering ML predictions or template_route_generator.**
+**You MUST attempt mp_search_recipe before considering ML predictions.**
 
-The core philosophy: **Literature data is gold. ML predictions are silver. Templates are last resort.**
+The core philosophy: **Literature data is gold. ML predictions are silver. Your knowledge-based suggestions are the fallback.**
 
 ---
 
@@ -22,20 +22,19 @@ The core philosophy: **Literature data is gold. ML predictions are silver. Templ
 
 For detailed tool specifications, see [Appendix: Detailed Tool Catalogue](#appendix-detailed-tool-catalogue) at the end of this document.
 
-### Synthesis Route Planning Tools (3-Tier Priority)
+### Synthesis Route Planning Tools (Tiered Priority)
 
 | Tier | Tool | Purpose | When to Use | Limitations |
 |------|------|---------|-------------|-------------|
 | **1 (Highest)** | `mp_search_recipe` | Literature recipe search from Materials Project | **ALWAYS TRY FIRST** — proven experimental routes | Limited to ~10-20K materials with literature data |
 | **2 (Medium)** | `er_predict_precursors` | ML-based precursor prediction | No literature found, need solid-state route | **Solid-state only**, cannot do hydrothermal/sol-gel |
 | **2 (Medium)** | `er_predict_temperature` | ML-based temperature prediction | Have precursors, need temperature estimate | **Solid-state only**, ±50-100°C accuracy |
-| **3 (Last Resort)** | `template_route_generator` | Heuristic route generation | No literature & ML failed/inapplicable | Low confidence, requires human review |
 
 ### Key Decision Points
 
 **Method selection:**
-- **Solid-state synthesis needed** → Use Tier 1 (literature) → If none, try Tier 2 (ML) → If fails, try Tier 3 (templates)
-- **Hydrothermal/sol-gel/other methods** → Use Tier 1 (literature) only, or Tier 3 (templates) if no literature exists
+- **Solid-state synthesis needed** → Use Tier 1 (literature) → If none, try Tier 2 (ML) → If fails, suggest based on your knowledge
+- **Hydrothermal/sol-gel/other methods** → Use Tier 1 (literature) only → If none, suggest based on your knowledge
   - **CANNOT use Tier 2 ML tools for non-solid-state methods**
 
 **When to use `format_routes=True` in `mp_search_recipe`:**
@@ -56,14 +55,14 @@ For detailed tool specifications, see [Appendix: Detailed Tool Catalogue](#appen
 2. **DECISION POINT**: Check if literature routes found
 3. **STEP 2A - RETURN LITERATURE**: If found, return high-confidence routes
 4. **STEP 2B - ML PREDICTION**: If NOT found AND solid-state, try ML prediction
-5. **STEP 2C - TEMPLATE FALLBACK**: If ML fails/unavailable, generate template routes with warnings
+5. **STEP 2C - KNOWLEDGE-BASED SUGGESTION**: If ML fails/unavailable, suggest routes based on your knowledge of materials chemistry
 
 **CRITICAL RULES:**
 - NEVER skip Step 1 (literature search)
-- NEVER use ML/templates if literature routes exist
+- NEVER use ML or suggest routes if literature routes exist
 - ONLY use ML tools for solid-state synthesis
-- ALWAYS warn user when returning ML or template routes
-- Templates require human review before execution
+- ALWAYS warn user when returning ML-predicted or knowledge-based routes
+- Knowledge-based routes require human review and validation before execution
 
 ---
 
@@ -187,11 +186,11 @@ RETURN {
 ```
 IF constraints.synthesis_type is specified AND constraints.synthesis_type != "solid-state":
     LOG "ML prediction not applicable for {constraints.synthesis_type}"
-    GOTO STEP 2C (Template fallback)
+    GOTO STEP 2C (Knowledge-based suggestion)
 
 IF user_request explicitly mentions "hydrothermal", "sol-gel", "CVD", etc.:
     LOG "ML prediction only supports solid-state synthesis"
-    GOTO STEP 2C (Template fallback)
+    GOTO STEP 2C (Knowledge-based suggestion)
 
 # Default assumption: solid-state for inorganic oxides
 SET use_ml = True
@@ -206,12 +205,12 @@ TRY:
     )
     STORE result in ml_precursors
 EXCEPT Exception:
-    LOG "ML precursor prediction failed, falling back to templates"
-    GOTO STEP 2C (Template fallback)
+    LOG "ML precursor prediction failed, providing knowledge-based suggestion"
+    GOTO STEP 2C (Knowledge-based suggestion)
 
 IF ml_precursors.top_prediction.confidence < 0.2:
-    LOG "Low ML confidence ({confidence}), falling back to templates"
-    GOTO STEP 2C (Template fallback)
+    LOG "Low ML confidence ({confidence}), providing knowledge-based suggestion"
+    GOTO STEP 2C (Knowledge-based suggestion)
 ```
 
 **Step 2B.3:** Predict synthesis temperature
@@ -232,8 +231,8 @@ FOR each precursor_set in ml_precursors.precursor_sets (top 3):
         CONTINUE
 
 IF no valid ml_temperature:
-    LOG "All ML temperature predictions failed, falling back to templates"
-    GOTO STEP 2C (Template fallback)
+    LOG "All ML temperature predictions failed, providing knowledge-based suggestion"
+    GOTO STEP 2C (Knowledge-based suggestion)
 ```
 
 **Step 2B.4:** Format ML-based route
@@ -307,93 +306,82 @@ RETURN {
 
 ---
 
-### STEP 2C: TEMPLATE FALLBACK (LOW CONFIDENCE PATH)
+### STEP 2C: KNOWLEDGE-BASED SUGGESTION (FALLBACK PATH)
 
 **Condition:** Execute if Step 2B (ML) failed, inapplicable, or low confidence
 
-**WARNING:** This path generates unvalidated heuristic routes that REQUIRE human review
+**WARNING:** This path provides suggestions based on your knowledge of materials chemistry. These are NOT validated routes and REQUIRE human review.
 
 **Step 2C.1:** Log ML/literature search failure
 ```
 LOG "WARNING: No literature routes found for {target_formula}"
-LOG "Falling back to template-based generation (low confidence)"
+LOG "No ML predictions available or applicable"
+LOG "Providing knowledge-based synthesis suggestions"
 ```
 
-**Step 2C.2:** Determine synthesis method
+**Step 2C.2:** Analyze the target material
 ```
-IF user specified method:
-    SET method = user_specified_method
-ELSE IF constraints.temperature_max < 400:
-    SET method = "hydrothermal"  # Prefer low-temp method
-ELSE:
-    SET method = "auto"  # Let template generator decide
-```
-
-**Step 2C.3:** Generate template routes
-```
-CALL template_route_generator(
-    target_material={"composition": target_formula},
-    synthesis_method=method,
-    constraints=constraints
-)
-
-STORE result in template_result
+# Analyze composition to determine likely synthesis approaches
+ANALYZE target_formula:
+    - Element types (metals, non-metals, transition metals)
+    - Oxidation states
+    - Common synthesis methods for similar materials
+    - Temperature ranges typical for similar compounds
+    - Precursor availability
 ```
 
-**Step 2C.4:** Validate template output and add warnings
+**Step 2C.3:** Suggest synthesis route based on materials chemistry knowledge
 ```
-FOR each route in template_result.routes:
-    # Template routes are low confidence
-    ASSERT route.source == "template_with_mp_precursors"
-    ASSERT route.confidence <= 0.50
-    
-    # Add mandatory warnings
-    IF route.warnings is None:
-        SET route.warnings = []
-    
-    APPEND "No literature or ML precedent found for this composition" to route.warnings
-    APPEND "Template based on heuristics - experimental validation required" to route.warnings
-    APPEND "DO NOT execute without expert review" to route.warnings
-    
-    # Flag for mandatory review
-    SET route.requires_review = True
-    SET route.requires_expert_validation = True
-    SET route.autonomous_execution_approved = False
+# Use your knowledge of materials chemistry to suggest:
+# - Appropriate synthesis method (solid-state, hydrothermal, sol-gel, etc.)
+# - Likely precursor compounds
+# - Typical temperature ranges
+# - Processing steps
+# - Expected challenges or considerations
+
+# Base suggestions on:
+# - Similar materials in literature (even if not exact match)
+# - General principles of inorganic synthesis
+# - Element chemistry and reactivity
+# - Phase formation considerations
 ```
 
-**Step 2C.5:** Format user warning message
+**Step 2C.4:** Format knowledge-based suggestion with clear warnings
 ```
-MESSAGE = "⚠️ WARNING: No literature synthesis or ML prediction succeeded for {target_formula}. "
-MESSAGE += "Generated template-based route using heuristics and precursor data from similar materials. "
-MESSAGE += "\n\n**This route has NOT been validated experimentally** "
-MESSAGE += "(confidence: {route.confidence:.2f}) and requires expert review before execution.\n\n"
-MESSAGE += "Recommended starting point: {format_precursors(route.precursors)}, "
-MESSAGE += "{route.steps[main_step].description}.\n\n"
-MESSAGE += "**SAFETY REQUIREMENTS:**\n"
-MESSAGE += "1. Expert review by materials scientist\n"
-MESSAGE += "2. Literature search for similar materials\n"
-MESSAGE += "3. Small-scale test (mg quantities) first\n"
-MESSAGE += "4. Phase characterization plan (XRD, etc.)\n\n"
-MESSAGE += "Consider searching for related compositions with known synthesis routes."
+MESSAGE = "⚠️ WARNING: No literature synthesis or ML prediction available for {target_formula}.\n\n"
+MESSAGE += "Based on materials chemistry knowledge, here is a suggested starting point:\n\n"
+MESSAGE += "[Describe suggested synthesis approach, precursors, conditions]\n\n"
+MESSAGE += "**IMPORTANT LIMITATIONS:**\n"
+MESSAGE += "- This suggestion is based on general materials chemistry principles\n"
+MESSAGE += "- NOT validated experimentally for this specific composition\n"
+MESSAGE += "- Conditions may need significant optimization\n"
+MESSAGE += "- Phase purity is not guaranteed\n\n"
+MESSAGE += "**REQUIRED BEFORE ATTEMPTING:**\n"
+MESSAGE += "1. Literature search for closely related materials\n"
+MESSAGE += "2. Expert review by materials scientist\n"
+MESSAGE += "3. Small-scale test (mg quantities)\n"
+MESSAGE += "4. Phase characterization plan (XRD, etc.)\n"
+MESSAGE += "5. Safety assessment for all precursors and products\n\n"
+MESSAGE += "Consider consulting domain experts or searching for related compositions with known routes."
 ```
 
-**Step 2C.6:** Return result with warnings
+**Step 2C.5:** Return suggestion with appropriate disclaimers
 ```
 RETURN {
     "success": True,
-    "source": "template",
+    "source": "knowledge_based_suggestion",
     "confidence": "low",
-    "routes": template_result.routes,
     "requires_review": "MANDATORY",
     "autonomous_execution": "FORBIDDEN",
     "warnings": [
         "No literature or ML precedent found",
-        "Template-based heuristics only",
+        "Knowledge-based suggestion only",
         "Expert validation required before execution",
-        "High risk of incorrect conditions or wrong phase"
+        "Significant optimization likely needed"
     ],
     "safety_requirements": [
-        "Expert review required",
+        "Literature review required",
+        "Expert consultation needed",
         "Small-scale test mandatory",
         "Characterization plan needed"
     ],
@@ -428,16 +416,6 @@ IF mp_search_recipe fails with FormulaError:
     }
 ```
 
-**Error Type 3: Template generation failure**
-```
-IF template_route_generator fails:
-    RETURN {
-        "success": False,
-        "error": "Cannot generate template route",
-        "recommendation": "Search for similar materials with known synthesis or consult literature"
-    }
-```
-
 ---
 
 ### CONFIDENCE SCORING RULES
@@ -455,11 +433,11 @@ IF template_route_generator fails:
 - Action: Moderate review, small-scale test recommended
 - **ONLY for solid-state synthesis**
 
-**Low Confidence (0.0-0.49):**
-- Source: Pure heuristic templates
-- Basis: Generic rules not validated for this material
-- Validation: None
-- Action: MANDATORY expert review, small-scale testing REQUIRED
+**Low Confidence (suggested routes):**
+- Source: Knowledge-based suggestions from materials chemistry principles
+- Basis: General synthesis principles and analogous materials
+- Validation: None for this specific material
+- Action: MANDATORY expert review, literature search, small-scale testing REQUIRED
 
 ---
 
@@ -595,7 +573,7 @@ ml_route = {
 
 ---
 
-### Example 3: Novel Material (Template Path - ML Not Applicable)
+### Example 3: Novel Material (Knowledge-Based Suggestion - ML Not Applicable)
 
 ```python
 # User: "Generate a hydrothermal synthesis route for NiO nanowires"
@@ -609,37 +587,33 @@ mp_result = mp_search_recipe(
 
 # Step 2: ML prediction SKIPPED (user requested hydrothermal, not solid-state)
 
-# Step 3: Fall back to template generator
-template_result = template_route_generator(
-    target_material={"composition": "NiO"},
-    synthesis_method="hydrothermal"
-)
-
-# Step 3: Return low-confidence template routes with warnings
-# template_result["routes"][0]:
-# {
-#   "method": "hydrothermal",
-#   "source": "template_with_mp_precursors",
-#   "confidence": 0.35,
-#   "precursors": [
-#     {"compound": "Ni(NO3)2", "form": "nitrate"},  # From MP precursor data
-#     {"compound": "NaOH", "form": "base"}
-#   ],
-#   "steps": [
-#     {"action": "dissolve", "description": "Dissolve precursors in water"},
-#     {"action": "autoclave", "temperature_c": 180, "hold_time_h": 12, "atmosphere": "autogenous"}
-#   ],
-#   "requires_review": True,
-#   "warnings": [
-#     "No literature or ML precedent found for hydrothermal NiO nanowires",
-#     "Template based on heuristics - validation required",
-#     "ML tools not applicable (hydrothermal synthesis)"
-#   ]
-# }
+# Step 3: Provide knowledge-based suggestion
+# Use your understanding of materials chemistry:
+# - NiO is a transition metal oxide
+# - Hydrothermal synthesis commonly uses metal salts + base
+# - Typical conditions: 100-200°C, 6-24h
+# - Nanowire morphology may require surfactants or templates
 ```
 
 **Agent message to user:**
-> "⚠️ WARNING: No literature synthesis or ML prediction succeeded for hydrothermal NiO nanowires. Generated template-based route using heuristics. **This route has NOT been validated experimentally** (confidence: 0.35) and requires expert review before execution. ML tools are not applicable for hydrothermal synthesis (solid-state only). Consider searching for related compositions."
+> "⚠️ WARNING: No literature synthesis routes found for hydrothermal NiO nanowires in Materials Project. ML tools are not applicable (solid-state only).
+>
+> Based on materials chemistry knowledge, here's a suggested starting point:
+>
+> **Suggested Approach: Hydrothermal Synthesis**
+> - Precursors: Ni(NO₃)₂·6H₂O or NiCl₂·6H₂O + NaOH or NH₄OH
+> - Temperature: 150-180°C
+> - Time: 12-24 hours
+> - Atmosphere: Autogenous pressure in autoclave
+> - Notes: Nanowire morphology may require addition of surfactants (e.g., CTAB, PVP) or templates. pH control is critical.
+>
+> **IMPORTANT:** This suggestion is based on general principles for transition metal oxide nanowire synthesis. It has NOT been validated for this specific composition. Required before attempting:
+> 1. Search literature for similar nickel oxide nanostructure syntheses
+> 2. Expert review by materials chemist
+> 3. Small-scale test (<100 mg)
+> 4. XRD/SEM characterization plan
+> 5. Safety assessment for precursors"
+```
 
 ---
 
@@ -661,11 +635,11 @@ if routes["success"] and routes["n_routes"] > 0:
     # SUCCESS: Return literature-validated low-temp routes
     return routes
 else:
-    # ONLY NOW fall back to template (user should be informed this is unvalidated)
-    return template_route_generator(
-        target_material={"composition": "NiO"},
-        synthesis_method="hydrothermal",
-        constraints={"max_temperature": 300}
+    # ONLY NOW provide knowledge-based suggestion
+    # User should be informed this is unvalidated
+    return knowledge_based_suggestion(
+        target_formula="NiO",
+        constraints={"max_temperature": 300, "method": "hydrothermal"}
     )
 ```
 
@@ -684,27 +658,44 @@ else:
 - Verify precursor availability and purity
 - Check equipment compatibility (e.g., autoclave rating for hydrothermal)
 
-### For Template Routes (Low Confidence)
+### For ML-Predicted Routes (Medium Confidence)
+⚠️ **Requires moderate validation:**
+- Data-driven predictions based on synthesis literature
+- Temperature uncertainty: ±50-100°C
+- Precursor combinations statistically likely but not validated for this material
+
+✅ **Required steps before execution:**
+1. **Small-scale test** (mg quantities) mandatory
+2. **Literature cross-check** for similar materials
+3. **Temperature optimization** may be needed
+4. **Characterization plan** to verify phase purity (XRD, etc.)
+
+### For Knowledge-Based Suggestions (Low Confidence)
 ❌ **NOT safe for autonomous execution without review:**
-- Heuristic-based temperatures may be incorrect
-- Precursor combinations may not react as expected
-- May produce wrong phases or no reaction at all
-- Chemical compatibility not verified
+- Suggestions based on general chemistry principles
+- Specific conditions not validated for this material
+- May need significant optimization
+- Phase formation not guaranteed
 
 ✅ **Required steps before execution:**
 1. **Expert review** by materials scientist familiar with this chemistry
-2. **Literature search** for similar materials to validate assumptions
+2. **Comprehensive literature search** for similar materials
 3. **Phase diagram check** if available for this system
-4. **Small-scale test** (mg quantities) before scaling up
+4. **Small-scale test** (mg quantities) mandatory
 5. **Characterization plan** to verify phase purity (XRD, etc.)
 
 ### Red Flags Requiring Extra Caution
-**WARNING - Template routes for:**
+**WARNING - Knowledge-based suggestions for:**
 - Materials with > 4 elements (complexity increases failure risk)
 - Rare earth elements (complex oxidation states)
 - Systems with known competing phases
 - Air-sensitive or moisture-sensitive elements
 - High-volatility elements (Li, Na, K at high temps)
+
+**WARNING - ML predictions with:**
+- Low confidence scores (< 0.4)
+- No similar materials in training data
+- Elements not well-represented in synthesis literature
 
 **WARNING - Any route involving:**
 - Temperatures not seen in literature for similar materials
@@ -717,12 +708,12 @@ else:
 ## Extending the Skill
 
 ### Adding New Synthesis Methods
-To support additional methods beyond solid-state/hydrothermal/sol-gel:
+To support additional methods beyond solid-state:
 
-1. Add method logic to `template_route_generator`
-2. Update `synthesis_method` parameter options
-3. Add corresponding heuristics for temperature/time estimation
-4. Document in this SKILL.md
+1. Update ML models to support new synthesis types (currently only solid-state)
+2. Expand knowledge base for suggesting routes for new methods
+3. Add method-specific validation and safety guidelines
+4. Update SKILL.md documentation with new method considerations
 
 ### Extending ML Predictions to Other Synthesis Methods
 **Current limitation:** ML tools (`er_predict_precursors`, `er_predict_temperature`) only work for solid-state synthesis.
@@ -744,8 +735,8 @@ ml_solgel = er_predict_solgel_conditions(
 
 # Skill orchestrates:
 # 1. Try MP literature (highest confidence)
-# 2. Try method-specific ML prediction (medium confidence)
-# 3. Fall back to templates (lowest confidence)
+# 2. Try method-specific ML prediction for solid-state (medium confidence)
+# 3. Fall back to knowledge-based suggestions (lowest confidence)
 ```
 
 ### Connecting to Characterization
@@ -775,16 +766,16 @@ xrd_result = characterization_protocol_generator(
 - MP database may not have indexed all papers yet
 - Try related compositions (e.g., search `LiCoO2` to inform `LiNiO2` synthesis)
 
-### "Template generates unrealistic temperatures"
-- Templates use heuristics that may not capture all edge cases
+### "ML predictions seem unrealistic"
+- ML models have ±50-100°C temperature uncertainty
 - Cross-reference with similar materials in literature
-- Adjust using `constraints={'max_temperature': ...}` parameter
-- This is expected behavior - templates are starting points, not gospel
+- Low confidence scores (< 0.4) indicate higher uncertainty
+- Small-scale testing recommended for all ML predictions
 
 ### "All routes require 'review' flag"
 - If even literature routes have `requires_review=True`, check your safety settings
-- Template routes always require review - this is by design
-- For production autonomous labs, implement automated safety checks
+- ML-predicted and knowledge-based routes always require review - this is by design
+- For production autonomous labs, use only literature routes from Materials Project
 
 ### "MP API key errors"
 - Ensure `MP_API_KEY` environment variable is set
@@ -830,12 +821,8 @@ ml_temperature = er_predict_temperature(
     precursors=["Li2CO3", "La2O3", "ZrO2"]  # Required: precursor list
 )
 
-# 3. Generate template-based routes (FALLBACK ONLY)
-template_routes = template_route_generator(
-    target_material={"composition": "NiO"},
-    synthesis_method="auto",        # Options: "solid_state", "hydrothermal", "sol_gel", "auto"
-    constraints=None                # Optional: same as above
-)
+# Note: If both MP and ML fail, provide knowledge-based suggestions
+# based on materials chemistry principles (see Step 2C in algorithm)
 ```
 
 ### Decision Table
@@ -843,14 +830,14 @@ template_routes = template_route_generator(
 | Need | Approach | Confidence | Review |
 |------|----------|------------|--------|
 | Synthesis route for LiCoO2 | `mp_search_recipe(format_routes=True)` | High (0.90) | Minimal |
-| Route for novel oxide (solid-state) | `mp_search_recipe` → `er_predict_precursors` + `er_predict_temperature` → `template_route_generator` | Medium (0.50-0.70) if ML | Recommended |
-| Route for novel material (non-solid-state) | `mp_search_recipe(format_routes=True)` → `template_route_generator` (skip ML) | Low (0.40) | **REQUIRED** |
+| Route for novel oxide (solid-state) | `mp_search_recipe` → `er_predict_precursors` + `er_predict_temperature` | Medium (0.50-0.70) | Recommended |
+| Route for novel material (non-solid-state) | `mp_search_recipe(format_routes=True)` → knowledge-based suggestion | Low | **REQUIRED** |
 | Low-temp synthesis | `mp_search_recipe(format_routes=True, temperature_max=300)` | High if found | Minimal |
 | Constrained search | `mp_search_recipe(format_routes=True, temperature_max=..., heating_time_max=...)` | High if found | Varies |
-| Production at scale | `mp_search_recipe(format_routes=True)` ONLY (DO NOT USE ML/TEMPLATES) | High | Recommended |
+| Production at scale | `mp_search_recipe(format_routes=True)` ONLY (DO NOT USE ML) | High | Recommended |
 | Analyze/compare recipes | `mp_search_recipe(format_routes=False)` - returns raw recipe data | N/A | N/A |
 
-**GOLDEN RULE: ALWAYS search mp_search_recipe first. Use ML predictions for solid-state if no literature. Only use template_route_generator as last resort.**
+**GOLDEN RULE: ALWAYS search mp_search_recipe first. Use ML predictions for solid-state if no literature. Provide knowledge-based suggestions as last resort.**
 
 **Note:** Use `format_routes=True` when you need standardized routes for synthesis planning. Use `format_routes=False` when you need raw recipe data for analysis or comparison.
 
@@ -1011,42 +998,27 @@ Queries Materials Project Synthesis Database for experimental synthesis procedur
 
 ---
 
-### 4. `template_route_generator` — Heuristic Route Generation
-Generates template-based synthesis routes using Materials Project precursor data and heuristic process parameters.
+### Note on Knowledge-Based Suggestions
 
-**Key parameters:**
-- `target_material`: `{'composition': 'LiCoO2'}`
-- `synthesis_method`: `'solid_state'`, `'hydrothermal'`, `'sol_gel'`, or `'auto'`
-- `constraints`: Optional limits (`max_temperature`, `max_time`, `exclude_precursors`, etc.)
+When both MP literature search and ML predictions fail or are not applicable, the agent should provide knowledge-based synthesis suggestions using materials chemistry principles.
 
-**Returns:**
-```python
-{
-  "success": True,
-  "target_composition": "LiCoO2",
-  "routes": [
-    {
-      "method": "solid_state",
-      "source": "template_with_mp_precursors",
-      "confidence": 0.40,  # Low - unvalidated heuristic
-      "precursors": [...],  # From MP literature for this material
-      "steps": [...],  # From heuristic templates
-      "requires_review": True,  # Human approval needed
-      "warnings": ["Using 206 recipes from Materials Project for precursor selection"]
-    }
-  ]
-}
-```
+**Characteristics of knowledge-based suggestions:**
+- Based on general synthesis principles and analogous materials
+- NOT validated experimentally for the specific composition
+- Requires expert review and small-scale testing
+- Should include clear warnings about limitations
+- Must include safety considerations
 
-**Key characteristics:**
-- Uses MP to find precursors actually used for this material in literature
-- Applies template-based heuristics for temperatures/times/steps
-- Lower confidence than literature routes
-- Requires human review before autonomous execution
+**When to use:**
+- No literature recipes exist in MP for the material
+- ML predictions not applicable (non-solid-state methods)
+- ML predictions failed or have very low confidence (< 0.2)
 
-**When templates are used:**
-- No literature recipes exist in MP for this material
-- User explicitly requests template generation
-- User provides constraints that filter out all literature routes
+**Required disclaimers:**
+- Not experimentally validated
+- Based on general chemistry principles
+- Expert review mandatory
+- Small-scale testing required
+- Safety assessment needed
 
 ---

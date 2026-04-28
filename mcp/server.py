@@ -76,7 +76,6 @@ from tools.selection import (
     multi_objective_ranker,
 )
 from tools.synthesis_planning import (
-    template_route_generator,
     synthesis_recipe_quantifier,
 )
 from tools.elemwise_retro import (
@@ -188,7 +187,6 @@ mcp.tool()(predict_molecule_synthesizability)
 mcp.tool()(multi_objective_ranker)
 
 # Synthesis planning tools
-mcp.tool()(template_route_generator)
 mcp.tool()(synthesis_recipe_quantifier)
 
 # ElemwiseRetro tools

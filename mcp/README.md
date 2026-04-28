@@ -219,7 +219,6 @@ python -m pytest tests/pymatgen/test_enumeration_generator.py -v
 | Tool | Description |
 |---|---|
 | `synthesis_recipe_quantifier` | Extract and quantify synthesis parameters from text recipes |
-| `template_route_generator` | Generate template-based synthesis routes for inorganic materials |
 
 ### ElemwiseRetro
 
