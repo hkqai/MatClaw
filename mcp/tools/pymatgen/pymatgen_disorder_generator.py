@@ -32,7 +32,10 @@ def pymatgen_disorder_generator(
                 "Can be: single Structure dict (from Structure.as_dict()), "
                 "list of Structure dicts, CIF string, or list of CIF strings. "
                 "Structures with existing partial occupancies will be rejected unless "
-                "allow_existing_disorder=True."
+                "allow_existing_disorder=True. "
+                "IMPORTANT FORMAT NOTE:"
+                "- Dict format MUST be pymatgen Structure.as_dict() format (contains '@module' and 'lattice' keys). "
+                "- When using MP structures, convert to CIF string first or use  CIF format for best compatibility."
             )
         )
     ],

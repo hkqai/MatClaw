@@ -33,7 +33,10 @@ def pymatgen_sqs_generator(
                 "Accepts the same formats as pymatgen_enumeration_generator: "
                 "a single Structure dict (from Structure.as_dict()), a list of dicts, "
                 "a CIF string, or a list of CIF strings. "
-                "Each structure must have at least one site with partial occupancy."
+                "Each structure must have at least one site with partial occupancy. "
+                "IMPORTANT FORMAT NOTE:"
+                "- Dict format MUST be pymatgen Structure.as_dict() format (contains '@module' and 'lattice' keys). "
+                "- When using MP structures, convert to CIF string first or use  CIF format for best compatibility."
             )
         )
     ],

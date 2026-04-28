@@ -15,7 +15,10 @@ def pymatgen_ion_exchange_generator(
         Union[Dict[str, Any], List[Dict[str, Any]], str, List[str]],
         Field(description=(
             "Input structure(s) to apply ion exchange to. Can be: single Structure dict "
-            "(from Structure.as_dict()), list of dicts, CIF string, or list of CIF strings."
+            "(from Structure.as_dict()), list of dicts, CIF string, or list of CIF strings. "
+            "IMPORTANT FORMAT NOTE:"
+            "- Dict format MUST be pymatgen Structure.as_dict() format (contains '@module' and 'lattice' keys). "
+            "- When using MP structures, convert to CIF string first or use  CIF format for best compatibility."
         ))
     ],
     replace_ion: Annotated[

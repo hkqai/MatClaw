@@ -20,7 +20,10 @@ def pymatgen_defect_generator(
                 "Bulk host structure as a pymatgen Structure dict (from Structure.as_dict()), "
                 "or a CIF string.  This is the perfect, defect-free reference cell — typically "
                 "the output of pymatgen_prototype_builder, pymatgen_substitution_generator, "
-                "pymatgen_ion_exchange_generator, or an mp_get_material_properties structure."
+                "pymatgen_ion_exchange_generator, or an mp_get_material_properties structure. "
+                "IMPORTANT FORMAT NOTE:"
+                "- Dict format MUST be pymatgen Structure.as_dict() format (contains '@module' and 'lattice' keys). "
+                "- When using MP structures, convert to CIF string first or use  CIF format for best compatibility."
             )
         )
     ],

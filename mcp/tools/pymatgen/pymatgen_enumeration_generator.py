@@ -29,7 +29,10 @@ def pymatgen_enumeration_generator(
                 "Can be: single Structure dict (from Structure.as_dict()), "
                 "list of Structure dicts, CIF string, or list of CIF strings. "
                 "Each structure must have at least one site with partial occupancy; "
-                "fully ordered structures are skipped unless check_ordered_input=False."
+                "fully ordered structures are skipped unless check_ordered_input=False. "
+                "IMPORTANT FORMAT NOTE:"
+                "- Dict format MUST be pymatgen Structure.as_dict() format (contains '@module' and 'lattice' keys). "
+                "- When using MP structures, convert to CIF string first or use  CIF format for best compatibility."
             )
         )
     ],
