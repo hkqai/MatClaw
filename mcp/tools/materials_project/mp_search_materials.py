@@ -68,7 +68,12 @@ def mp_search_materials(
     max_results: Annotated[
         int,
         Field(default=10, ge=1, le=100, description="Maximum number of results to return (1-100). Default: 10.")
-    ] = 10
+    ] = 10,
+    
+    include_structure: Annotated[
+        bool,
+        Field(default=False, description="Include full crystal structure data (lattice parameters, atomic positions). Increases response size.")
+    ] = False
 ) -> Dict[str, Any]:
     """
     Search Materials Project database for inorganic materials and crystals.
@@ -279,6 +284,11 @@ def mp_search_materials(
                     "theoretical": summary.theoretical
                 }
                 
+                # Include full structure if requested
+                if include_structure and summary.structure:
+                    # Serialize structure to dict (pymatgen Structure.as_dict())
+                    material_info["structure"] = summary.structure.as_dict()
+                
                 materials.append(material_info)
 
             # Prepare response
@@ -329,4 +339,3 @@ def mp_search_materials(
             "materials": [],
             "error": error_msg
         }
-    
